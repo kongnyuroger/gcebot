@@ -56,3 +56,22 @@ model User {
 
   @@map("users")
 }
+
+enum PaymentMethod {
+  MTN_MOMO
+  ORANGE_MONEY
+}
+
+model Subscription {
+  id               String           @id @default(cuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [phone_number])
+  tier             SubscriptionTier
+  startDate        DateTime
+  endDate          DateTime
+  paymentMethod    PaymentMethod
+  paymentReference String
+  createdAt        DateTime         @default(now())
+
+  @@map("subscriptions")
+}
