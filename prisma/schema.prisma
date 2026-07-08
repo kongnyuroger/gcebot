@@ -10,16 +10,6 @@ datasource db {
   extensions = [vector]
 }
 
-// Minimal placeholder proving the pgvector integration end-to-end.
-// Superseded by Document + EmbeddingChunk in this branch.
-model DocumentChunk {
-  id        String                       @id @default(cuid())
-  content   String
-  metadata  Json?
-  embedding Unsupported("vector(1536)")
-  createdAt DateTime                     @default(now())
-}
-
 enum Level {
   O_LEVEL
   A_LEVEL
@@ -74,4 +64,51 @@ model Subscription {
   createdAt        DateTime         @default(now())
 
   @@map("subscriptions")
+}
+
+enum DocType {
+  SYLLABUS
+  PAST_PAPER
+  TEXTBOOK
+  MARKING_SCHEME
+}
+
+enum IngestionStatus {
+  QUEUED
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+model Document {
+  id               String          @id @default(cuid())
+  filename         String
+  subject          String
+  level            Level
+  docType          DocType
+  year             Int?
+  ingestionStatus  IngestionStatus @default(QUEUED)
+  errorMessage     String?
+  chunkCount       Int             @default(0)
+  createdAt        DateTime        @default(now())
+
+  chunks EmbeddingChunk[]
+
+  @@map("documents")
+}
+
+model EmbeddingChunk {
+  id         String                       @id @default(cuid())
+  documentId String
+  document   Document                     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content    String
+  embedding  Unsupported("vector(1536)")
+  subject    String
+  level      Level
+  topic      String?
+  year       Int?
+  chunkIndex Int
+  createdAt  DateTime                     @default(now())
+
+  @@map("embedding_chunks")
 }
