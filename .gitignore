@@ -13,6 +13,9 @@ coverage/
 # turborepo
 .turbo/
 
+# prisma generated client
+apps/api/generated/
+
 # env
 .env
 .env.*
