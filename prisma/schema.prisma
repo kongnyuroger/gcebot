@@ -40,9 +40,12 @@ model User {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  subscription Subscription?
-  interactions Interaction[]
-  mockExams    MockExam[]
+  subscription       Subscription?
+  interactions       Interaction[]
+  mockExams          MockExam[]
+  referralsMade      ReferralConversion[] @relation("ReferralConversionReferrer")
+  referredConversion ReferralConversion?  @relation("ReferralConversionNewUser")
+  pendingPayments    PendingPayment[]
 
   @@map("users")
 }
@@ -149,4 +152,38 @@ model MockExam {
   createdAt      DateTime  @default(now())
 
   @@map("mock_exams")
+}
+
+model ReferralConversion {
+  id              String    @id @default(cuid())
+  referrerId      String
+  referrer        User      @relation("ReferralConversionReferrer", fields: [referrerId], references: [phone_number])
+  newUserId       String    @unique
+  newUser         User      @relation("ReferralConversionNewUser", fields: [newUserId], references: [phone_number])
+  rewardGrantedAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@map("referral_conversions")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+}
+
+model PendingPayment {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [phone_number])
+  tier       SubscriptionTier
+  amount     Int
+  currency   String           @default("XAF")
+  provider   PaymentMethod
+  externalId String           @unique
+  status     PaymentStatus    @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@map("pending_payments")
 }
