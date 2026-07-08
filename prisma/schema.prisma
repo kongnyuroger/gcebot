@@ -81,16 +81,16 @@ enum IngestionStatus {
 }
 
 model Document {
-  id               String          @id @default(cuid())
-  filename         String
-  subject          String
-  level            Level
-  docType          DocType
-  year             Int?
-  ingestionStatus  IngestionStatus @default(QUEUED)
-  errorMessage     String?
-  chunkCount       Int             @default(0)
-  createdAt        DateTime        @default(now())
+  id              String          @id @default(cuid())
+  filename        String
+  subject         String
+  level           Level
+  docType         DocType
+  year            Int?
+  ingestionStatus IngestionStatus @default(QUEUED)
+  errorMessage    String?
+  chunkCount      Int             @default(0)
+  createdAt       DateTime        @default(now())
 
   chunks EmbeddingChunk[]
 
@@ -98,9 +98,9 @@ model Document {
 }
 
 model EmbeddingChunk {
-  id         String                       @id @default(cuid())
+  id         String                      @id @default(cuid())
   documentId String
-  document   Document                     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
   content    String
   embedding  Unsupported("vector(1536)")
   subject    String
@@ -108,7 +108,45 @@ model EmbeddingChunk {
   topic      String?
   year       Int?
   chunkIndex Int
-  createdAt  DateTime                     @default(now())
+  createdAt  DateTime                    @default(now())
 
   @@map("embedding_chunks")
+}
+
+enum InteractionType {
+  QA
+  PRACTICE
+  MOCK_EXAM
+  MILESTONE
+}
+
+model Interaction {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [phone_number])
+  type         InteractionType
+  subject      String
+  topic        String
+  questionText String
+  userAnswer   String
+  correct      Boolean?
+  createdAt    DateTime        @default(now())
+
+  @@map("interactions")
+}
+
+model MockExam {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [phone_number])
+  subject        String
+  level          Level
+  startedAt      DateTime
+  submittedAt    DateTime?
+  score          Int?
+  maxScore       Int?
+  topicBreakdown Json?
+  createdAt      DateTime  @default(now())
+
+  @@map("mock_exams")
 }
