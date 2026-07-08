@@ -11,11 +11,48 @@ datasource db {
 }
 
 // Minimal placeholder proving the pgvector integration end-to-end.
-// Real RAG models (Subject, Document, etc.) land in their own feature branch.
+// Superseded by Document + EmbeddingChunk in this branch.
 model DocumentChunk {
   id        String                       @id @default(cuid())
   content   String
   metadata  Json?
   embedding Unsupported("vector(1536)")
   createdAt DateTime                     @default(now())
+}
+
+enum Level {
+  O_LEVEL
+  A_LEVEL
+}
+
+enum SubscriptionTier {
+  FREE
+  BASIC
+  PREMIUM
+  FAMILY
+}
+
+enum Language {
+  EN
+  FR
+}
+
+model User {
+  phone_number   String           @id
+  level          Level
+  subjects       String[]
+  tier           SubscriptionTier
+  language       Language         @default(EN)
+  streakDays     Int              @default(0)
+  lastActiveDate DateTime?
+  referralCode   String           @unique
+  referredBy     String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  subscription Subscription?
+  interactions Interaction[]
+  mockExams    MockExam[]
+
+  @@map("users")
 }
