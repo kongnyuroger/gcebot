@@ -10,12 +10,180 @@ datasource db {
   extensions = [vector]
 }
 
-// Minimal placeholder proving the pgvector integration end-to-end.
-// Real RAG models (Subject, Document, etc.) land in their own feature branch.
-model DocumentChunk {
-  id        String                       @id @default(cuid())
-  content   String
-  metadata  Json?
-  embedding Unsupported("vector(1536)")
-  createdAt DateTime                     @default(now())
+enum Level {
+  O_LEVEL
+  A_LEVEL
+}
+
+enum SubscriptionTier {
+  FREE
+  BASIC
+  PREMIUM
+  FAMILY
+}
+
+enum Language {
+  EN
+  FR
+}
+
+model User {
+  phone_number   String           @id
+  level          Level
+  subjects       String[]
+  tier           SubscriptionTier
+  language       Language         @default(EN)
+  streakDays     Int              @default(0)
+  lastActiveDate DateTime?
+  referralCode   String           @unique
+  referredBy     String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  subscription       Subscription?
+  interactions       Interaction[]
+  mockExams          MockExam[]
+  referralsMade      ReferralConversion[] @relation("ReferralConversionReferrer")
+  referredConversion ReferralConversion?  @relation("ReferralConversionNewUser")
+  pendingPayments    PendingPayment[]
+
+  @@map("users")
+}
+
+enum PaymentMethod {
+  MTN_MOMO
+  ORANGE_MONEY
+}
+
+model Subscription {
+  id               String           @id @default(cuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [phone_number])
+  tier             SubscriptionTier
+  startDate        DateTime
+  endDate          DateTime
+  paymentMethod    PaymentMethod
+  paymentReference String
+  createdAt        DateTime         @default(now())
+
+  @@map("subscriptions")
+}
+
+enum DocType {
+  SYLLABUS
+  PAST_PAPER
+  TEXTBOOK
+  MARKING_SCHEME
+}
+
+enum IngestionStatus {
+  QUEUED
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+model Document {
+  id              String          @id @default(cuid())
+  filename        String
+  subject         String
+  level           Level
+  docType         DocType
+  year            Int?
+  ingestionStatus IngestionStatus @default(QUEUED)
+  errorMessage    String?
+  chunkCount      Int             @default(0)
+  createdAt       DateTime        @default(now())
+
+  chunks EmbeddingChunk[]
+
+  @@map("documents")
+}
+
+model EmbeddingChunk {
+  id         String                      @id @default(cuid())
+  documentId String
+  document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content    String
+  embedding  Unsupported("vector(1536)")
+  subject    String
+  level      Level
+  topic      String?
+  year       Int?
+  chunkIndex Int
+  createdAt  DateTime                    @default(now())
+
+  @@map("embedding_chunks")
+}
+
+enum InteractionType {
+  QA
+  PRACTICE
+  MOCK_EXAM
+  MILESTONE
+}
+
+model Interaction {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [phone_number])
+  type         InteractionType
+  subject      String
+  topic        String
+  questionText String
+  userAnswer   String
+  correct      Boolean?
+  createdAt    DateTime        @default(now())
+
+  @@map("interactions")
+}
+
+model MockExam {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [phone_number])
+  subject        String
+  level          Level
+  startedAt      DateTime
+  submittedAt    DateTime?
+  score          Int?
+  maxScore       Int?
+  topicBreakdown Json?
+  createdAt      DateTime  @default(now())
+
+  @@map("mock_exams")
+}
+
+model ReferralConversion {
+  id              String    @id @default(cuid())
+  referrerId      String
+  referrer        User      @relation("ReferralConversionReferrer", fields: [referrerId], references: [phone_number])
+  newUserId       String    @unique
+  newUser         User      @relation("ReferralConversionNewUser", fields: [newUserId], references: [phone_number])
+  rewardGrantedAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@map("referral_conversions")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+}
+
+model PendingPayment {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [phone_number])
+  tier       SubscriptionTier
+  amount     Int
+  currency   String           @default("XAF")
+  provider   PaymentMethod
+  externalId String           @unique
+  status     PaymentStatus    @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@map("pending_payments")
 }
