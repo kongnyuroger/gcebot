@@ -7,6 +7,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { validateEnv } from './config/env.validation';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { SessionModule } from './session/session.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { SessionModule } from './session/session.module';
     PrismaModule,
     WhatsappModule,
     SessionModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
