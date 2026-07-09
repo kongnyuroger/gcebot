@@ -8,9 +8,18 @@ import { MenuHandler } from './handlers/menu.handler';
 import { FreeTextHandler } from './handlers/free-text.handler';
 import { WhatsappSendService } from './services/whatsapp-send.service';
 import { WhatsappRateLimitGuard } from './guards/rate-limit.guard';
+import { SessionModule } from '../session/session.module';
+import { UsersModule } from '../users/users.module';
+import { I18nModule } from '../i18n/i18n.module';
+import { OnboardingHandler } from '../handlers/onboarding.handler';
 
 @Module({
-  imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 30 }])],
+  imports: [
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 30 }]),
+    SessionModule,
+    UsersModule,
+    I18nModule,
+  ],
   controllers: [WhatsappController],
   providers: [
     MessageParserService,
@@ -20,6 +29,7 @@ import { WhatsappRateLimitGuard } from './guards/rate-limit.guard';
     FreeTextHandler,
     WhatsappSendService,
     WhatsappRateLimitGuard,
+    OnboardingHandler,
   ],
   exports: [WhatsappSendService],
 })
