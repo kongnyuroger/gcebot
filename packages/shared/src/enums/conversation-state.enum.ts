@@ -32,4 +32,7 @@ export interface SessionContext {
   examId?: string;
   pendingPaymentId?: string;
   conversationHistory?: ConversationMessage[];
+  // Subjects the user has tapped during onboarding's SUBJECT_SELECTION step,
+  // held here until they press "Confirm" and it's persisted via UsersService.
+  pendingSubjects?: string[];
 }

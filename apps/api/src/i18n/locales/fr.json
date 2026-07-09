@@ -10,6 +10,7 @@
     "levelALevel": "A-Level",
     "selectSubjects": "Parfait ! Maintenant, sélectionnez les matières que vous étudiez. Vous pouvez en choisir plusieurs.",
     "subjectsListTitle": "Choisir une matière",
+    "subjectsSectionTitle": "Matières",
     "subjectsSoFar": "Sélectionné jusqu'à présent : {{subjects}}",
     "confirmSubjects": "Est-ce bien vos matières ?",
     "confirmButton": "Confirmer",

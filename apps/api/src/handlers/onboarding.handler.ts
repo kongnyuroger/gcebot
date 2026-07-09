@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConversationState } from '@gcebot/shared';
-import { Language } from '../../generated/prisma';
+import { Language, Level } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
 import { WhatsappSendService } from '../whatsapp/services/whatsapp-send.service';
 import { SessionService } from '../session/session.service';
 import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
+import { chunk, MAX_LIST_ROWS_PER_MESSAGE, SUBJECTS_BY_LEVEL } from './subjects.constants';
+
+const CONFIRM_SUBJECTS_BUTTON_ID = 'confirm_subjects';
+const REDO_SUBJECTS_BUTTON_ID = 'redo_subjects';
 
 @Injectable()
 export class OnboardingHandler {
@@ -41,10 +45,114 @@ export class OnboardingHandler {
     await this.stateTransitionService.transition(phone, ConversationState.LEVEL_SELECTION);
   }
 
+  async handleLevelSelection(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const buttonId = message.buttonId;
+
+    if (buttonId !== Level.O_LEVEL && buttonId !== Level.A_LEVEL) {
+      this.logger.warn(`Unexpected level selection buttonId "${buttonId}" from ${phone}`);
+      const user = await this.usersService.getUserProfile(phone);
+      return this.sendLevelSelection(phone, user?.language ?? Language.EN);
+    }
+
+    const user = await this.usersService.updateLevel(phone, buttonId);
+    await this.sessionService.updateSessionField(phone, 'pendingSubjects', []);
+
+    await this.sendSubjectList(phone, buttonId, user.language);
+
+    await this.stateTransitionService.transition(phone, ConversationState.SUBJECT_SELECTION);
+  }
+
+  async handleSubjectSelection(message: ParsedMessage): Promise<void> {
+    if (message.type === 'list_reply') {
+      return this.handleSubjectTap(message);
+    }
+
+    if (message.type === 'button_reply' && message.buttonId === REDO_SUBJECTS_BUTTON_ID) {
+      return this.handleSubjectsRedo(message);
+    }
+
+    // "Confirm" is handled once Step 4's MAIN_MENU wiring lands - it needs to
+    // persist subjects, transition to MAIN_MENU, and send the menu.
+    this.logger.warn(
+      `Unhandled subject-selection interaction from ${message.from}: type=${message.type} buttonId=${message.buttonId}`,
+    );
+  }
+
   private async sendLevelSelection(phone: string, lang: Language): Promise<void> {
     await this.whatsappSendService.sendButtons(phone, this.i18n.t('onboarding.selectLevel', lang), [
-      { id: 'O_LEVEL', title: this.i18n.t('onboarding.levelOLevel', lang) },
-      { id: 'A_LEVEL', title: this.i18n.t('onboarding.levelALevel', lang) },
+      { id: Level.O_LEVEL, title: this.i18n.t('onboarding.levelOLevel', lang) },
+      { id: Level.A_LEVEL, title: this.i18n.t('onboarding.levelALevel', lang) },
     ]);
+  }
+
+  private async sendSubjectList(phone: string, level: Level, lang: Language): Promise<void> {
+    const subjects = SUBJECTS_BY_LEVEL[level];
+    const chunks = chunk(subjects, MAX_LIST_ROWS_PER_MESSAGE);
+
+    for (let i = 0; i < chunks.length; i++) {
+      const partSuffix = chunks.length > 1 ? ` (${i + 1}/${chunks.length})` : '';
+      await this.whatsappSendService.sendList(
+        phone,
+        this.i18n.t('onboarding.selectSubjects', lang) + partSuffix,
+        this.i18n.t('onboarding.subjectsListTitle', lang),
+        [
+          {
+            title: this.i18n.t('onboarding.subjectsSectionTitle', lang),
+            rows: chunks[i].map((subject) => ({ id: subject.id, title: subject.name })),
+          },
+        ],
+      );
+    }
+  }
+
+  private async sendSubjectConfirmation(phone: string, lang: Language): Promise<void> {
+    await this.whatsappSendService.sendButtons(
+      phone,
+      this.i18n.t('onboarding.confirmSubjects', lang),
+      [
+        { id: CONFIRM_SUBJECTS_BUTTON_ID, title: this.i18n.t('onboarding.confirmButton', lang) },
+        { id: REDO_SUBJECTS_BUTTON_ID, title: this.i18n.t('onboarding.redoButton', lang) },
+      ],
+    );
+  }
+
+  private async handleSubjectTap(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const subjectName = message.listTitle;
+
+    if (!subjectName) {
+      this.logger.warn(`Subject list_reply from ${phone} had no listTitle`);
+      return;
+    }
+
+    const session = await this.sessionService.getSession(phone);
+    const pendingSubjects = session?.pendingSubjects ?? [];
+
+    if (!pendingSubjects.includes(subjectName)) {
+      pendingSubjects.push(subjectName);
+    }
+
+    await this.sessionService.updateSessionField(phone, 'pendingSubjects', pendingSubjects);
+
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+
+    await this.whatsappSendService.sendText(
+      phone,
+      this.i18n.t('onboarding.subjectsSoFar', lang, { subjects: pendingSubjects.join(', ') }),
+    );
+    await this.sendSubjectConfirmation(phone, lang);
+  }
+
+  private async handleSubjectsRedo(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    await this.sessionService.updateSessionField(phone, 'pendingSubjects', []);
+
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+    const level = user?.level ?? Level.O_LEVEL;
+
+    await this.sendSubjectList(phone, level, lang);
   }
 }

@@ -10,6 +10,7 @@
     "levelALevel": "A-Level",
     "selectSubjects": "Great! Now tap the subjects you're studying. You can pick more than one.",
     "subjectsListTitle": "Choose a subject",
+    "subjectsSectionTitle": "Subjects",
     "subjectsSoFar": "Selected so far: {{subjects}}",
     "confirmSubjects": "Are these your subjects?",
     "confirmButton": "Confirm",
