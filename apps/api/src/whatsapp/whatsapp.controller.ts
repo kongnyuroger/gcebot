@@ -1,6 +1,18 @@
-import { Controller, Get, HttpStatus, Logger, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
+import { SignatureGuard } from './guards/signature.guard';
 
 @Controller('webhook')
 export class WhatsappController {
@@ -23,5 +35,14 @@ export class WhatsappController {
 
     this.logger.warn('Webhook verification failed: mode or verify_token mismatch');
     return res.status(HttpStatus.FORBIDDEN).send();
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SignatureGuard)
+  receiveWebhook(@Body() body: unknown) {
+    // Payload parsing and routing land in later steps of this branch.
+    this.logger.debug(`Received webhook payload: ${JSON.stringify(body)}`);
+    return { received: true };
   }
 }
