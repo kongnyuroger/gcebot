@@ -13,12 +13,18 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { SignatureGuard } from './guards/signature.guard';
+import { MessageParserService, WhatsAppWebhookPayload } from './services/message-parser.service';
+import { MessageRouterService } from './services/message-router.service';
 
 @Controller('webhook')
 export class WhatsappController {
   private readonly logger = new Logger(WhatsappController.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly messageParser: MessageParserService,
+    private readonly messageRouter: MessageRouterService,
+  ) {}
 
   @Get()
   verifyWebhook(
@@ -40,9 +46,14 @@ export class WhatsappController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @UseGuards(SignatureGuard)
-  receiveWebhook(@Body() body: unknown) {
-    // Payload parsing and routing land in later steps of this branch.
-    this.logger.debug(`Received webhook payload: ${JSON.stringify(body)}`);
+  receiveWebhook(@Body() body: WhatsAppWebhookPayload) {
+    const message = this.messageParser.parse(body);
+
+    if (!message) {
+      return { received: true };
+    }
+
+    this.messageRouter.route(message);
     return { received: true };
   }
 }
