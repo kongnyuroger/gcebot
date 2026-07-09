@@ -1,0 +1,52 @@
+{
+  "welcome": {
+    "greeting": "👋 Welcome to GCEBot, {{name}}!",
+    "description": "I'm your AI study assistant for GCE O-Level and A-Level exams. Ask me questions, practice with past papers, or sit a mock exam - all right here on WhatsApp.",
+    "cta": "Let's get you set up."
+  },
+  "onboarding": {
+    "selectLevel": "Which level are you preparing for?",
+    "levelOLevel": "O-Level",
+    "levelALevel": "A-Level",
+    "selectSubjects": "Great! Now tap the subjects you're studying. You can pick more than one.",
+    "subjectsListTitle": "Choose a subject",
+    "subjectsSoFar": "Selected so far: {{subjects}}",
+    "confirmSubjects": "Are these your subjects?",
+    "confirmButton": "Confirm",
+    "redoButton": "Redo",
+    "subjectsSaved": "Awesome, your subjects are set! 🎉"
+  },
+  "menu": {
+    "title": "Main Menu - what would you like to do?",
+    "buttonText": "Choose an option",
+    "askQuestion": "📚 Ask a Question",
+    "practice": "📝 Practice Past Qs",
+    "mockExam": "⏱️ Mock Exam",
+    "progress": "📊 My Progress",
+    "comingSoon": "This feature is coming soon - stay tuned!"
+  },
+  "settings": {
+    "resetting": "Let's update your level and subjects."
+  },
+  "help": {
+    "title": "Available commands:",
+    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+  },
+  "common": {
+    "mainMenu": "Main Menu",
+    "goBack": "Go Back",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "errors": {
+    "unknownCommand": "I didn't understand that. Send /menu to see options.",
+    "tryAgain": "Something went wrong. Please try again."
+  },
+  "quota": {
+    "exceeded": "You've reached your free question limit for today.",
+    "upgradePrompt": "Upgrade to Premium for unlimited access!"
+  },
+  "language": {
+    "switched": "Language switched to English."
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "welcome": {
+    "greeting": "👋 Bienvenue sur GCEBot, {{name}} !",
+    "description": "Je suis votre assistant d'étude IA pour les examens GCE O-Level et A-Level. Posez-moi des questions, entraînez-vous avec des épreuves des années passées, ou passez un examen blanc - directement ici sur WhatsApp.",
+    "cta": "Configurons votre profil."
+  },
+  "onboarding": {
+    "selectLevel": "Pour quel niveau vous préparez-vous ?",
+    "levelOLevel": "O-Level",
+    "levelALevel": "A-Level",
+    "selectSubjects": "Parfait ! Maintenant, sélectionnez les matières que vous étudiez. Vous pouvez en choisir plusieurs.",
+    "subjectsListTitle": "Choisir une matière",
+    "subjectsSoFar": "Sélectionné jusqu'à présent : {{subjects}}",
+    "confirmSubjects": "Est-ce bien vos matières ?",
+    "confirmButton": "Confirmer",
+    "redoButton": "Recommencer",
+    "subjectsSaved": "Super, vos matières sont enregistrées ! 🎉"
+  },
+  "menu": {
+    "title": "Menu principal - que souhaitez-vous faire ?",
+    "buttonText": "Choisir une option",
+    "askQuestion": "📚 Poser une question",
+    "practice": "📝 S'entraîner",
+    "mockExam": "⏱️ Examen blanc",
+    "progress": "📊 Ma progression",
+    "comingSoon": "Cette fonctionnalité arrive bientôt - restez à l'écoute !"
+  },
+  "settings": {
+    "resetting": "Mettons à jour votre niveau et vos matières."
+  },
+  "help": {
+    "title": "Commandes disponibles :",
+    "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
+  },
+  "common": {
+    "mainMenu": "Menu principal",
+    "goBack": "Retour",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "errors": {
+    "unknownCommand": "Je n'ai pas compris. Envoyez /menu pour voir les options.",
+    "tryAgain": "Une erreur s'est produite. Veuillez réessayer."
+  },
+  "quota": {
+    "exceeded": "Vous avez atteint votre limite quotidienne de questions gratuites.",
+    "upgradePrompt": "Passez à Premium pour un accès illimité !"
+  },
+  "language": {
+    "switched": "Langue changée en français."
+  }
+}
