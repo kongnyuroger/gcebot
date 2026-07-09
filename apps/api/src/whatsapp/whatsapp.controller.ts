@@ -11,8 +11,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { SignatureGuard } from './guards/signature.guard';
+import { WhatsappRateLimitGuard } from './guards/rate-limit.guard';
 import { MessageParserService, WhatsAppWebhookPayload } from './services/message-parser.service';
 import { MessageRouterService } from './services/message-router.service';
 
@@ -45,7 +47,8 @@ export class WhatsappController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  @UseGuards(SignatureGuard)
+  @UseGuards(SignatureGuard, WhatsappRateLimitGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   receiveWebhook(@Body() body: WhatsAppWebhookPayload) {
     const message = this.messageParser.parse(body);
 
