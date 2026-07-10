@@ -13,9 +13,15 @@ interface WhatsAppMessage {
   };
 }
 
+interface WhatsAppContact {
+  profile?: { name?: string };
+  wa_id?: string;
+}
+
 interface WhatsAppWebhookValue {
   messages?: WhatsAppMessage[];
   statuses?: unknown[];
+  contacts?: WhatsAppContact[];
 }
 
 interface WhatsAppWebhookChange {
@@ -43,6 +49,7 @@ export interface ParsedMessage {
   buttonText?: string;
   listId?: string; // for list replies
   listTitle?: string;
+  contactName?: string; // sender's WhatsApp display name, if Meta included one
 }
 
 @Injectable()
@@ -58,10 +65,13 @@ export class MessageParserService {
       return null;
     }
 
+    const value = body.entry[0].changes[0].value;
+
     const base = {
       from: message.from,
       messageId: message.id,
       timestamp: Number(message.timestamp),
+      contactName: value.contacts?.[0]?.profile?.name,
     };
 
     if (message.type === 'text' && message.text) {

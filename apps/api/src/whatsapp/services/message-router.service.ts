@@ -1,8 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { ConversationState } from '@gcebot/shared';
 import { CommandHandler } from '../handlers/command.handler';
 import { MenuHandler } from '../handlers/menu.handler';
 import { FreeTextHandler } from '../handlers/free-text.handler';
 import { ParsedMessage } from './message-parser.service';
+import { UsersService } from '../../users/users.service';
+import { SessionService } from '../../session/session.service';
+import { OnboardingHandler } from '../../handlers/onboarding.handler';
+import { MainMenuHandler } from '../../handlers/main-menu.handler';
 
 export enum MessageIntent {
   COMMAND = 'COMMAND',
@@ -10,26 +15,60 @@ export enum MessageIntent {
   FREE_TEXT = 'FREE_TEXT',
 }
 
+const MENU_COMMAND = '/menu';
+
 @Injectable()
 export class MessageRouterService {
   constructor(
     private readonly commandHandler: CommandHandler,
     private readonly menuHandler: MenuHandler,
     private readonly freeTextHandler: FreeTextHandler,
+    private readonly usersService: UsersService,
+    private readonly sessionService: SessionService,
+    private readonly onboardingHandler: OnboardingHandler,
+    private readonly mainMenuHandler: MainMenuHandler,
   ) {}
 
-  route(message: ParsedMessage): void {
+  async route(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+
+    if (await this.usersService.isNewUser(phone)) {
+      return this.onboardingHandler.handleNewUser(message);
+    }
+
+    // Global escape hatch: works from ANY state, so it bypasses the transition
+    // validator entirely (same reasoning as /settings in CommandHandler).
+    if (message.type === 'text' && message.text?.trim().toLowerCase() === MENU_COMMAND) {
+      await this.sessionService.updateSessionField(phone, 'state', ConversationState.MAIN_MENU);
+      return this.mainMenuHandler.sendMenu(phone);
+    }
+
     const intent = this.determineIntent(message);
 
-    switch (intent) {
-      case MessageIntent.COMMAND: {
-        const commandName = message.text!.slice(1).trim().split(/\s+/)[0]?.toLowerCase() ?? '';
-        return this.commandHandler.handle(message, commandName);
-      }
-      case MessageIntent.MENU_SELECTION:
+    if (intent === MessageIntent.COMMAND) {
+      const commandName = message.text!.slice(1).trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+      return this.commandHandler.handle(message, commandName);
+    }
+
+    if (intent === MessageIntent.MENU_SELECTION) {
+      return this.routeMenuSelection(message);
+    }
+
+    return this.freeTextHandler.handle(message);
+  }
+
+  private async routeMenuSelection(message: ParsedMessage): Promise<void> {
+    const session = await this.sessionService.getSession(message.from);
+
+    switch (session?.state) {
+      case ConversationState.LEVEL_SELECTION:
+        return this.onboardingHandler.handleLevelSelection(message);
+      case ConversationState.SUBJECT_SELECTION:
+        return this.onboardingHandler.handleSubjectSelection(message);
+      case ConversationState.MAIN_MENU:
+        return this.mainMenuHandler.handleSelection(message);
+      default:
         return this.menuHandler.handle(message);
-      case MessageIntent.FREE_TEXT:
-        return this.freeTextHandler.handle(message);
     }
   }
 
