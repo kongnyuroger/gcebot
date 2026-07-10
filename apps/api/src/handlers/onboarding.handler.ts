@@ -83,7 +83,8 @@ export class OnboardingHandler {
     );
   }
 
-  private async sendLevelSelection(phone: string, lang: Language): Promise<void> {
+  // Public: reused by CommandHandler's /settings command to re-run this same step.
+  async sendLevelSelection(phone: string, lang: Language): Promise<void> {
     await this.whatsappSendService.sendButtons(phone, this.i18n.t('onboarding.selectLevel', lang), [
       { id: Level.O_LEVEL, title: this.i18n.t('onboarding.levelOLevel', lang) },
       { id: Level.A_LEVEL, title: this.i18n.t('onboarding.levelALevel', lang) },

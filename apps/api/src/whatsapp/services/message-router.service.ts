@@ -18,7 +18,7 @@ export class MessageRouterService {
     private readonly freeTextHandler: FreeTextHandler,
   ) {}
 
-  route(message: ParsedMessage): void {
+  async route(message: ParsedMessage): Promise<void> {
     const intent = this.determineIntent(message);
 
     switch (intent) {
