@@ -1,0 +1,84 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConversationState } from '@gcebot/shared';
+import { Language } from '../../generated/prisma';
+import { ParsedMessage } from '../whatsapp/services/message-parser.service';
+import { WhatsappSendService } from '../whatsapp/services/whatsapp-send.service';
+import { StateTransitionService } from '../session/state-transition.service';
+import { UsersService } from '../users/users.service';
+import { I18nService } from '../i18n/i18n.service';
+
+export const MENU_ROW_ASK_QUESTION = 'ask_question';
+export const MENU_ROW_PRACTICE = 'practice';
+export const MENU_ROW_MOCK_EXAM = 'mock_exam';
+export const MENU_ROW_PROGRESS = 'progress';
+
+@Injectable()
+export class MainMenuHandler {
+  private readonly logger = new Logger(MainMenuHandler.name);
+
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly stateTransitionService: StateTransitionService,
+    private readonly whatsappSendService: WhatsappSendService,
+    private readonly i18n: I18nService,
+  ) {}
+
+  // Deliberately has no session/state side effects of its own - callers decide
+  // whether showing the menu should also move/reset the conversation state
+  // (e.g. OnboardingHandler already transitions to MAIN_MENU before calling this;
+  // a global "/menu" command instead resets state directly, bypassing the
+  // transition validator, since it must work from ANY state).
+  async sendMenu(phone: string): Promise<void> {
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+
+    await this.whatsappSendService.sendList(
+      phone,
+      this.i18n.t('menu.title', lang),
+      this.i18n.t('menu.buttonText', lang),
+      [
+        {
+          title: this.i18n.t('common.mainMenu', lang),
+          rows: [
+            { id: MENU_ROW_ASK_QUESTION, title: this.i18n.t('menu.askQuestion', lang) },
+            { id: MENU_ROW_PRACTICE, title: this.i18n.t('menu.practice', lang) },
+            { id: MENU_ROW_MOCK_EXAM, title: this.i18n.t('menu.mockExam', lang) },
+            { id: MENU_ROW_PROGRESS, title: this.i18n.t('menu.progress', lang) },
+          ],
+        },
+      ],
+    );
+  }
+
+  async handleSelection(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+
+    switch (message.listId) {
+      case MENU_ROW_ASK_QUESTION:
+        await this.stateTransitionService.transition(phone, ConversationState.QA_MODE);
+        return this.sendComingSoon(phone, lang);
+
+      case MENU_ROW_PRACTICE:
+        await this.stateTransitionService.transition(phone, ConversationState.PRACTICE_FILTER);
+        return this.sendComingSoon(phone, lang);
+
+      case MENU_ROW_MOCK_EXAM:
+        await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_SETUP);
+        return this.sendComingSoon(phone, lang);
+
+      case MENU_ROW_PROGRESS:
+        // No /progress command exists yet in this branch - same placeholder.
+        return this.sendComingSoon(phone, lang);
+
+      default:
+        this.logger.warn(`Unrecognized main menu selection "${message.listId}" from ${phone}`);
+        return this.sendMenu(phone);
+    }
+  }
+
+  private async sendComingSoon(phone: string, lang: Language): Promise<void> {
+    await this.whatsappSendService.sendText(phone, this.i18n.t('menu.comingSoon', lang));
+  }
+}

@@ -8,6 +8,7 @@ import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { chunk, MAX_LIST_ROWS_PER_MESSAGE, SUBJECTS_BY_LEVEL } from './subjects.constants';
+import { MainMenuHandler } from './main-menu.handler';
 
 const CONFIRM_SUBJECTS_BUTTON_ID = 'confirm_subjects';
 const REDO_SUBJECTS_BUTTON_ID = 'redo_subjects';
@@ -22,6 +23,7 @@ export class OnboardingHandler {
     private readonly stateTransitionService: StateTransitionService,
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
+    private readonly mainMenuHandler: MainMenuHandler,
   ) {}
 
   async handleNewUser(message: ParsedMessage): Promise<void> {
@@ -72,8 +74,10 @@ export class OnboardingHandler {
       return this.handleSubjectsRedo(message);
     }
 
-    // "Confirm" is handled once Step 4's MAIN_MENU wiring lands - it needs to
-    // persist subjects, transition to MAIN_MENU, and send the menu.
+    if (message.type === 'button_reply' && message.buttonId === CONFIRM_SUBJECTS_BUTTON_ID) {
+      return this.handleSubjectsConfirmed(message);
+    }
+
     this.logger.warn(
       `Unhandled subject-selection interaction from ${message.from}: type=${message.type} buttonId=${message.buttonId}`,
     );
@@ -154,5 +158,25 @@ export class OnboardingHandler {
     const level = user?.level ?? Level.O_LEVEL;
 
     await this.sendSubjectList(phone, level, lang);
+  }
+
+  private async handleSubjectsConfirmed(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const session = await this.sessionService.getSession(phone);
+    const subjects = session?.pendingSubjects ?? [];
+
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+
+    if (subjects.length === 0) {
+      this.logger.warn(`${phone} pressed Confirm with no subjects selected`);
+      return this.sendSubjectList(phone, user?.level ?? Level.O_LEVEL, lang);
+    }
+
+    await this.usersService.updateSubjects(phone, subjects);
+    await this.stateTransitionService.transition(phone, ConversationState.MAIN_MENU);
+
+    await this.whatsappSendService.sendText(phone, this.i18n.t('onboarding.subjectsSaved', lang));
+    await this.mainMenuHandler.sendMenu(phone);
   }
 }

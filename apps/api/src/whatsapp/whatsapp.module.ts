@@ -12,6 +12,7 @@ import { SessionModule } from '../session/session.module';
 import { UsersModule } from '../users/users.module';
 import { I18nModule } from '../i18n/i18n.module';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
+import { MainMenuHandler } from '../handlers/main-menu.handler';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { OnboardingHandler } from '../handlers/onboarding.handler';
     WhatsappSendService,
     WhatsappRateLimitGuard,
     OnboardingHandler,
+    MainMenuHandler,
   ],
   exports: [WhatsappSendService],
 })
