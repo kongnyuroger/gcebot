@@ -9,7 +9,7 @@ A WhatsApp AI tutoring system for Cameroonian students preparing for the **GCE O
 | Backend | NestJS 10 + TypeScript (strict mode) |
 | ORM / DB | Prisma + PostgreSQL with the `pgvector` extension |
 | Messaging | WhatsApp Cloud API (Meta Graph API v18.0) |
-| AI | Anthropic Claude (`claude-haiku-4-5` for simple queries, `claude-sonnet-4-6` for complex ones) |
+| AI | OpenAI (`gpt-4o-mini` for simple queries, `gpt-4o` for complex ones) |
 | Payments | MTN MoMo Collections API + Orange Money API |
 | Queue | Bull (Redis-backed) |
 | Cache / Session | Redis (`ioredis`) |
@@ -74,7 +74,7 @@ The API listens on `PORT` (default `3000`); the WhatsApp webhook is at `POST/GET
 
 ### Environment variables
 
-All required env vars are validated with Zod at startup (`apps/api/src/config/env.validation.ts`) — the app refuses to boot if any are missing or malformed. See `.env.example` for the full list: database/Redis URLs, WhatsApp Cloud API credentials, Anthropic/OpenAI keys, MTN MoMo credentials, and an optional Sentry DSN.
+All required env vars are validated with Zod at startup (`apps/api/src/config/env.validation.ts`) — the app refuses to boot if any are missing or malformed. See `.env.example` for the full list: database/Redis URLs, WhatsApp Cloud API credentials, an OpenAI API key, MTN MoMo credentials, and an optional Sentry DSN.
 
 ## Common scripts
 
