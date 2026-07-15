@@ -7,6 +7,9 @@ export interface ChunkMetadata {
   level: string;
   year?: number;
   docType: string;
+  // Optional document-level fallback used when a chunk has no auto-detected
+  // topic (e.g. a syllabus with no "SECTION A"/"Question N"-style markers).
+  topic?: string;
 }
 
 export interface ChunkWithMetadata {
@@ -170,7 +173,7 @@ export class ChunkingService {
       }
 
       const content = currentUnits.map((unit) => unit.text).join('\n\n');
-      const topic = currentUnits.find((unit) => unit.topic)?.topic;
+      const topic = currentUnits.find((unit) => unit.topic)?.topic ?? metadata.topic;
 
       chunks.push({
         content,
