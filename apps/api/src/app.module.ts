@@ -8,6 +8,7 @@ import { validateEnv } from './config/env.validation';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { SessionModule } from './session/session.module';
 import { UsersModule } from './users/users.module';
+import { RagModule } from './rag/rag.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module';
     WhatsappModule,
     SessionModule,
     UsersModule,
+    RagModule,
   ],
   controllers: [AppController],
   providers: [AppService],
