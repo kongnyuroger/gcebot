@@ -11,6 +11,7 @@ import { VectorSearchService } from './services/vector-search.service';
 import { PromptAssemblerService } from './services/prompt-assembler.service';
 import { LlmService } from './services/llm.service';
 import { ResponseFormatterService } from './services/response-formatter.service';
+import { ResponseCacheService } from './services/response-cache.service';
 import { QaService } from './services/qa.service';
 import { IngestionService } from './services/ingestion.service';
 import { IngestionProcessor } from './processors/ingestion.processor';
@@ -37,6 +38,7 @@ import { INGESTION_QUEUE_NAME } from './queues/ingestion.queue';
     PromptAssemblerService,
     LlmService,
     ResponseFormatterService,
+    ResponseCacheService,
     QaService,
     IngestionProcessor,
     IngestionService,
@@ -50,6 +52,7 @@ import { INGESTION_QUEUE_NAME } from './queues/ingestion.queue';
     PromptAssemblerService,
     LlmService,
     ResponseFormatterService,
+    ResponseCacheService,
     QaService,
     IngestionService,
   ],

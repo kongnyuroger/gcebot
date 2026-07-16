@@ -4,10 +4,11 @@ import { InteractionType } from '../../../generated/prisma';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../../users/users.service';
 import { SessionService } from '../../session/session.service';
-import { VectorSearchService } from './vector-search.service';
+import { VectorSearchService, VectorSearchFilter } from './vector-search.service';
 import { PromptAssemblerService } from './prompt-assembler.service';
 import { LlmService } from './llm.service';
 import { ResponseFormatterService } from './response-formatter.service';
+import { ResponseCacheService } from './response-cache.service';
 
 const NO_RESULTS_MESSAGE =
   "I couldn't find relevant study material for that question. Try being more specific or ask about a different topic.";
@@ -89,6 +90,7 @@ export class QaService {
     private readonly promptAssembler: PromptAssemblerService,
     private readonly llmService: LlmService,
     private readonly responseFormatter: ResponseFormatterService,
+    private readonly responseCache: ResponseCacheService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -104,11 +106,20 @@ export class QaService {
 
     const session = await this.sessionService.getSession(phone);
     const subject = this.determineSubject(subjectOverride, session, question, user.subjects);
+    const filter: VectorSearchFilter = { subject, level: user.level };
 
-    const results = await this.vectorSearchService.search(question, {
-      subject,
-      level: user.level,
-    });
+    const cached = await this.responseCache.getCached(question, filter);
+    if (cached) {
+      // A cache hit skips vector search + LLM generation entirely, but the
+      // interaction still gets logged and history updated as if it were a
+      // fresh answer - no topic is available from a cache hit, so it falls
+      // back to 'General' same as any other missing-topic case.
+      await this.logInteraction(phone, subject, undefined, question, cached.join(' '));
+      await this.updateConversationHistory(phone, session, question, cached.join(' '));
+      return cached;
+    }
+
+    const results = await this.vectorSearchService.search(question, filter);
 
     if (results.length === 0) {
       this.logger.log(`No vector search results for ${phone} (subject=${subject})`);
@@ -130,6 +141,7 @@ export class QaService {
 
     await this.logInteraction(phone, subject, results[0]?.topic, question, answer);
     await this.updateConversationHistory(phone, session, question, answer);
+    await this.responseCache.setCache(question, filter, formattedParts);
 
     return formattedParts;
   }
