@@ -16,6 +16,9 @@ coverage/
 # prisma generated client
 apps/api/generated/
 
+# locally-stored uploaded documents (RAG ingestion)
+apps/api/uploads/
+
 # env
 .env
 .env.*
