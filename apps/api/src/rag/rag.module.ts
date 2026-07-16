@@ -6,6 +6,7 @@ import { ChunkingService } from './services/chunking.service';
 import { EmbeddingService } from './services/embedding.service';
 import { VectorStoreService } from './services/vector-store.service';
 import { VectorSearchService } from './services/vector-search.service';
+import { PromptAssemblerService } from './services/prompt-assembler.service';
 import { IngestionService } from './services/ingestion.service';
 import { IngestionProcessor } from './processors/ingestion.processor';
 import { INGESTION_QUEUE_NAME } from './queues/ingestion.queue';
@@ -26,6 +27,7 @@ import { INGESTION_QUEUE_NAME } from './queues/ingestion.queue';
     EmbeddingService,
     VectorStoreService,
     VectorSearchService,
+    PromptAssemblerService,
     IngestionProcessor,
     IngestionService,
   ],
@@ -35,6 +37,7 @@ import { INGESTION_QUEUE_NAME } from './queues/ingestion.queue';
     EmbeddingService,
     VectorStoreService,
     VectorSearchService,
+    PromptAssemblerService,
     IngestionService,
   ],
 })
