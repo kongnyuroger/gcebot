@@ -12,6 +12,10 @@ export interface AssembledPrompt {
   userMessage: string;
 }
 
+export interface PromptOptions {
+  isDiagramQuestion?: boolean;
+}
+
 const LANGUAGE_LABELS: Record<string, string> = {
   EN: 'English',
   FR: 'French',
@@ -35,12 +39,16 @@ export class PromptAssemblerService {
     query: string,
     results: SearchResult[],
     userContext: PromptUserContext,
+    options?: PromptOptions,
   ): AssembledPrompt {
     const languageLabel = LANGUAGE_LABELS[userContext.language] ?? userContext.language;
     const levelLabel = LEVEL_LABELS[userContext.level] ?? userContext.level;
     const contextBlock = results
       .map((result, index) => `[${index + 1}] ${result.content} ${this.formatCitation(result)}`)
       .join('\n');
+    const diagramInstruction = options?.isDiagramQuestion
+      ? `\n${this.buildDiagramInstruction(results, userContext)}\n`
+      : '';
 
     const systemPrompt = `You are GCEBot, an expert and patient tutor helping Cameroonian students prepare for the GCE ${levelLabel} ${userContext.subject} examination.
 
@@ -52,13 +60,23 @@ RULES:
 5. Respond in ${languageLabel}.
 6. For mathematical expressions, write them in plain text (e.g., 'x squared' not 'x²').
 7. Keep answers concise but complete — students are reading on a phone screen.
-
+${diagramInstruction}
 CONTEXT:
 ---
 ${contextBlock}
 ---`;
 
     return { systemPrompt, userMessage: query };
+  }
+
+  private buildDiagramInstruction(results: SearchResult[], userContext: PromptUserContext): string {
+    const topic = results[0]?.topic ?? userContext.subject;
+    return (
+      'This question involves a diagram. Since you cannot send images, provide a clear ' +
+      'TEXTUAL description structured as — Description: [what it shows], Key parts to ' +
+      'label: [bulleted list], How they connect: [relationships]. Suggest the student ' +
+      `searches for '${topic} diagram' to see a visual.`
+    );
   }
 
   private formatCitation(result: SearchResult): string {

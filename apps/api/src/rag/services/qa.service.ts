@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConversationMessage, SessionContext } from '@gcebot/shared';
-import { InteractionType } from '../../../generated/prisma';
+import { InteractionType, SubscriptionTier } from '../../../generated/prisma';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../../users/users.service';
 import { SessionService } from '../../session/session.service';
@@ -95,6 +95,10 @@ const FOLLOW_UP_PATTERNS: RegExp[] = [
   /^more\.?$/i,
 ];
 
+const DIAGRAM_KEYWORDS = ['draw', 'diagram', 'sketch', 'label', 'illustrate', 'structure of'];
+
+const DIAGRAM_PREMIUM_TIP = '💡 Tip: diagram image support is coming soon for Premium users.';
+
 @Injectable()
 export class QaService {
   private readonly logger = new Logger(QaService.name);
@@ -125,6 +129,8 @@ export class QaService {
     const filter: VectorSearchFilter = { subject, level: user.level };
     const conversationHistory = session?.conversationHistory ?? [];
     const isFollowUp = this.isFollowUpQuestion(question);
+    const isDiagramQuestion = this.isDiagramQuestion(question);
+    const isPremiumUser = user.tier === SubscriptionTier.PREMIUM;
 
     // Follow-ups are only meaningful in light of the previous exchange, so
     // the same literal text (e.g. "why?") can have a completely different
@@ -139,7 +145,10 @@ export class QaService {
         // back to 'General' same as any other missing-topic case.
         await this.logInteraction(phone, subject, undefined, question, cached.join(' '));
         await this.updateConversationHistory(phone, session, question, cached.join(' '));
-        return cached;
+        // The Premium tip is specific to the requesting user's tier, not the
+        // cached content itself (which is shared across users/tiers) - it is
+        // appended per-request rather than baked into what gets cached.
+        return this.withDiagramTip(cached, isDiagramQuestion, isPremiumUser);
       }
     }
 
@@ -157,11 +166,16 @@ export class QaService {
       return [NO_RESULTS_MESSAGE];
     }
 
-    const { systemPrompt, userMessage } = this.promptAssembler.assemblePrompt(question, results, {
-      level: user.level,
-      subject: subject ?? user.subjects[0] ?? '',
-      language: user.language,
-    });
+    const { systemPrompt, userMessage } = this.promptAssembler.assemblePrompt(
+      question,
+      results,
+      {
+        level: user.level,
+        subject: subject ?? user.subjects[0] ?? '',
+        language: user.language,
+      },
+      { isDiagramQuestion },
+    );
 
     const answer = await this.llmService.generate(systemPrompt, userMessage, {
       complexity: 'complex',
@@ -177,7 +191,20 @@ export class QaService {
       await this.responseCache.setCache(question, filter, formattedParts);
     }
 
-    return formattedParts;
+    return this.withDiagramTip(formattedParts, isDiagramQuestion, isPremiumUser);
+  }
+
+  private isDiagramQuestion(question: string): boolean {
+    const lowerQuestion = question.toLowerCase();
+    return DIAGRAM_KEYWORDS.some((keyword) => lowerQuestion.includes(keyword));
+  }
+
+  private withDiagramTip(
+    parts: string[],
+    isDiagramQuestion: boolean,
+    isPremium: boolean,
+  ): string[] {
+    return isDiagramQuestion && isPremium ? [...parts, DIAGRAM_PREMIUM_TIP] : parts;
   }
 
   private isFollowUpQuestion(question: string): boolean {
