@@ -40,7 +40,8 @@
     "askAnother": "Poser une autre question",
     "askAnotherPrompt": "👇 Allez-y, tapez votre prochaine question.",
     "changeSubject": "Changer de matière",
-    "noActiveQuestion": "Posez d'abord une question, ensuite je pourrai vous donner un indice !"
+    "noActiveQuestion": "Posez d'abord une question, ensuite je pourrai vous donner un indice !",
+    "quotaExceeded": "Vous avez utilisé vos 10 questions gratuites aujourd'hui 📚 Passez à Basic (1500 FCFA/mois) pour des questions illimitées ! Envoyez /subscribe pour mettre à niveau."
   },
   "help": {
     "title": "Commandes disponibles :",

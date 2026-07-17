@@ -9,6 +9,7 @@ import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { QaService } from '../rag/services/qa.service';
 import { LlmService } from '../rag/services/llm.service';
+import { QuotaService } from '../quota/quota.service';
 import { MainMenuHandler } from './main-menu.handler';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -36,6 +37,7 @@ export class QaModeHandler {
     private readonly i18n: I18nService,
     private readonly qaService: QaService,
     private readonly llmService: LlmService,
+    private readonly quotaService: QuotaService,
     // MainMenuHandler already depends on QaModeHandler (to enter QA_MODE from
     // the main menu tap) - forwardRef breaks the resulting circular DI edge,
     // since this handler also needs MainMenuHandler.sendMenu() for the
@@ -101,6 +103,13 @@ export class QaModeHandler {
 
     if (!questionText) {
       this.logger.warn(`Non-text message from ${phone} while AWAITING_QUESTION; ignoring`);
+      return;
+    }
+
+    const quota = await this.quotaService.checkQuota(phone);
+    if (!quota.allowed) {
+      this.logger.warn(`QA quota exceeded for ${phone}: used=${quota.used}/${quota.limit}`);
+      await this.whatsappSendService.sendText(phone, this.i18n.t('qa.quotaExceeded', lang));
       return;
     }
 
