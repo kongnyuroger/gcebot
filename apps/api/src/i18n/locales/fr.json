@@ -39,7 +39,8 @@
     "followUpPrompt": "Que souhaitez-vous faire ensuite ?",
     "askAnother": "Poser une autre question",
     "askAnotherPrompt": "👇 Allez-y, tapez votre prochaine question.",
-    "changeSubject": "Changer de matière"
+    "changeSubject": "Changer de matière",
+    "noActiveQuestion": "Posez d'abord une question, ensuite je pourrai vous donner un indice !"
   },
   "help": {
     "title": "Commandes disponibles :",

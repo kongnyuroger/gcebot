@@ -39,7 +39,8 @@
     "followUpPrompt": "What would you like to do next?",
     "askAnother": "Ask another",
     "askAnotherPrompt": "👇 Go ahead, type your next question.",
-    "changeSubject": "Change subject"
+    "changeSubject": "Change subject",
+    "noActiveQuestion": "Ask a question first, then I can give you a hint!"
   },
   "help": {
     "title": "Available commands:",

@@ -8,6 +8,7 @@ import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { QaService } from '../rag/services/qa.service';
+import { LlmService } from '../rag/services/llm.service';
 import { MainMenuHandler } from './main-menu.handler';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -15,6 +16,13 @@ const MAX_SUBJECT_BUTTONS = 3;
 export const FOLLOW_UP_ASK_ANOTHER = 'qa_ask_another';
 export const FOLLOW_UP_CHANGE_SUBJECT = 'qa_change_subject';
 export const FOLLOW_UP_MAIN_MENU = 'qa_main_menu';
+
+function buildHintSystemPrompt(question: string): string {
+  return (
+    `The student is working on this question: ${question}. Give a helpful hint ` +
+    'that guides them toward the answer WITHOUT revealing it fully. Keep it to 1-2 sentences.'
+  );
+}
 
 @Injectable()
 export class QaModeHandler {
@@ -27,6 +35,7 @@ export class QaModeHandler {
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
     private readonly qaService: QaService,
+    private readonly llmService: LlmService,
     // MainMenuHandler already depends on QaModeHandler (to enter QA_MODE from
     // the main menu tap) - forwardRef breaks the resulting circular DI edge,
     // since this handler also needs MainMenuHandler.sendMenu() for the
@@ -133,6 +142,30 @@ export class QaModeHandler {
         this.logger.warn(`Unrecognized follow-up selection "${message.buttonId}" from ${phone}`);
         return this.sendFollowUpButtons(phone, lang);
     }
+  }
+
+  async handleHint(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+
+    const session = await this.sessionService.getSession(phone);
+    const currentQuestion = session?.currentQuestionText;
+
+    if (!currentQuestion) {
+      await this.whatsappSendService.sendText(phone, this.i18n.t('qa.noActiveQuestion', lang));
+      return;
+    }
+
+    // A hint is a short, cheap request on its own (no retrieved context, no
+    // conversation history needed) - gpt-4o-mini is plenty for 1-2 sentences.
+    const hint = await this.llmService.generate(
+      buildHintSystemPrompt(currentQuestion),
+      currentQuestion,
+      { complexity: 'simple' },
+    );
+
+    await this.whatsappSendService.sendText(phone, hint);
   }
 
   private async clearQaContext(phone: string): Promise<void> {
