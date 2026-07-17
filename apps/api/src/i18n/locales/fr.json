@@ -45,7 +45,7 @@
   },
   "help": {
     "title": "Commandes disponibles :",
-    "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
+    "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/ask - Poser une question\n/hint - Obtenir un indice pour votre question actuelle\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
   },
   "common": {
     "mainMenu": "Menu principal",

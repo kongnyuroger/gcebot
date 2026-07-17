@@ -8,6 +8,7 @@ import { UsersService } from '../../users/users.service';
 import { SessionService } from '../../session/session.service';
 import { OnboardingHandler } from '../../handlers/onboarding.handler';
 import { MainMenuHandler } from '../../handlers/main-menu.handler';
+import { QaModeHandler } from '../../handlers/qa-mode.handler';
 
 export enum MessageIntent {
   COMMAND = 'COMMAND',
@@ -27,6 +28,7 @@ export class MessageRouterService {
     private readonly sessionService: SessionService,
     private readonly onboardingHandler: OnboardingHandler,
     private readonly mainMenuHandler: MainMenuHandler,
+    private readonly qaModeHandler: QaModeHandler,
   ) {}
 
   async route(message: ParsedMessage): Promise<void> {
@@ -54,6 +56,13 @@ export class MessageRouterService {
       return this.routeMenuSelection(message);
     }
 
+    // FREE_TEXT while AWAITING_QUESTION is the actual question text, not a
+    // catch-all "I didn't understand that" case.
+    const session = await this.sessionService.getSession(phone);
+    if (session?.state === ConversationState.AWAITING_QUESTION) {
+      return this.qaModeHandler.handleQuestion(message);
+    }
+
     return this.freeTextHandler.handle(message);
   }
 
@@ -67,6 +76,10 @@ export class MessageRouterService {
         return this.onboardingHandler.handleSubjectSelection(message);
       case ConversationState.MAIN_MENU:
         return this.mainMenuHandler.handleSelection(message);
+      case ConversationState.QA_MODE:
+        return this.qaModeHandler.handleSubjectSelection(message);
+      case ConversationState.AWAITING_QUESTION:
+        return this.qaModeHandler.handleFollowUpSelection(message);
       default:
         return this.menuHandler.handle(message);
     }

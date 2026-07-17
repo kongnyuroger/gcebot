@@ -7,6 +7,7 @@ import { SessionService } from '../../session/session.service';
 import { UsersService } from '../../users/users.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { OnboardingHandler } from '../../handlers/onboarding.handler';
+import { QaModeHandler } from '../../handlers/qa-mode.handler';
 
 @Injectable()
 export class CommandHandler {
@@ -18,6 +19,7 @@ export class CommandHandler {
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
     private readonly onboardingHandler: OnboardingHandler,
+    private readonly qaModeHandler: QaModeHandler,
   ) {}
 
   async handle(message: ParsedMessage, commandName: string): Promise<void> {
@@ -36,6 +38,10 @@ export class CommandHandler {
         return this.handleLanguageSwitch(phone, Language.FR);
       case 'help':
         return this.handleHelp(phone, lang);
+      case 'ask':
+        return this.qaModeHandler.enterQaMode(phone);
+      case 'hint':
+        return this.qaModeHandler.handleHint(message);
       default:
         this.logger.warn(`Unknown command "/${commandName}" from ${phone}`);
         return this.handleUnknownCommand(phone, lang);
