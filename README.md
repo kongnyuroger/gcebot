@@ -27,6 +27,9 @@ gcebot/
 │   │       ├── whatsapp/    # Webhook controller, signature/rate-limit guards,
 │   │       │                # message parsing + routing, outbound send service
 │   │       ├── handlers/    # Conversation-flow handlers (onboarding, main menu)
+│   │       ├── rag/         # Ingestion (PDF -> chunks -> embeddings -> pgvector)
+│   │       │                # and query engine (vector search, prompt assembly,
+│   │       │                # LLM, WhatsApp formatting, response cache, QA orchestrator)
 │   │       ├── session/     # Redis-backed session store + state machine validator
 │   │       ├── users/       # User upsert, profile, streaks
 │   │       ├── i18n/        # EN/FR message catalogs + interpolation
@@ -103,6 +106,8 @@ API-specific (run with `--workspace=api`, or `cd apps/api`):
 
 - **Conversation state machine.** Every user session is a `SessionContext` (`state` + scratch fields) stored in Redis under `session:{phone}` with a 2-hour TTL. `StateTransitionService` validates state changes against an explicit graph (`VALID_TRANSITIONS`) — most transitions must follow the graph, but a few user-initiated commands (`/menu`, `/settings`) are deliberate escape hatches that reset state directly, since they need to work from *any* state.
 - **pgvector.** Raw SQL is used for all vector operations (per the project's coding standard) since Prisma can't read/write the `Unsupported("vector(n)")` column type through its normal query API.
+- **RAG ingestion.** A document goes through a Bull-queued pipeline (`IngestionProcessor`): PDF text extraction → semantic chunking (with overlap) → OpenAI embeddings → storage in `embedding_chunks` (pgvector, ivfflat index), with `Document.ingestionStatus` tracking progress and surfacing the real error on failure.
+- **RAG query engine.** `QaService` orchestrates the whole answer flow per question: determine subject (explicit override → session context → keyword inference → the user's first enrolled subject) → check `ResponseCacheService` (SHA-256 of the normalized question + search filter, 24h TTL, skipped for time-sensitive questions) → `VectorSearchService` (cosine similarity via `<=>`, topK 5, similarity floor 0.3) → `PromptAssemblerService` (assembles a numbered, cited CONTEXT block) → `LlmService` (OpenAI, `gpt-4o-mini`/`gpt-4o` by complexity, last 5 exchanges of history) → `ResponseFormatterService` (markdown → WhatsApp formatting, splits responses over 4096 chars into numbered `(N/M)` parts). Every answer is logged as an `Interaction` and folded into the session's conversation history.
 - **i18n.** All outbound WhatsApp copy goes through `I18nService.t(key, lang, params?)` — no hardcoded user-facing strings. Catalogs live in `apps/api/src/i18n/locales/{en,fr}.json`.
 - **WhatsApp message limits.** Interactive buttons cap at 3 and list messages cap at 10 rows — `WhatsappSendService` enforces the button limit, and handlers that need more options (the 4-item main menu, the 11-subject A-Level catalog) use lists instead of buttons, chunking across multiple messages where needed.
 - **Signature verification.** Inbound webhooks are verified via HMAC-SHA256 over the *raw* request body (`main.ts` boots Nest with `rawBody: true` specifically so the exact bytes Meta signed are available — a re-serialized JSON body would not match byte-for-byte).
@@ -116,4 +121,4 @@ API-specific (run with `--workspace=api`, or `cd apps/api`):
 ## Testing
 
 - **Unit tests** (`npm run test`) mock external dependencies (axios, Prisma) and run in CI on every push/PR.
-- **Integration tests** (`npm run test:integration --workspace=api`, after `docker compose up -d`) hit the real Postgres/Redis — run these locally before opening a PR that touches session, state-transition, or user-service logic. Not part of CI yet (no service containers provisioned there).
+- **Integration tests** (`npm run test:integration --workspace=api`, after `docker compose up -d`) hit the real Postgres/Redis — run these locally before opening a PR that touches session, state-transition, user-service, or RAG (ingestion or query engine) logic. RAG integration specs mock only the OpenAI-backed embedding/LLM calls; retrieval, pgvector storage, and prompt/response formatting all run for real. Not part of CI yet (no service containers provisioned there).
