@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { SessionContext } from '@gcebot/shared';
+import { ConversationMessage, SessionContext } from '@gcebot/shared';
 import { InteractionType } from '../../../generated/prisma';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../../users/users.service';
@@ -79,6 +79,22 @@ const SUBJECT_KEYWORDS: Record<string, string[]> = {
   ],
 };
 
+// Short follow-ups only make sense in light of the previous exchange - their
+// raw text carries little to no topical content of its own for either vector
+// search or (especially) the response cache, which is keyed on question text.
+const FOLLOW_UP_PATTERNS: RegExp[] = [
+  /^why\??$/i,
+  /^why (is|does|do|did|would|should) (that|this|it)\??$/i,
+  /^explain( more| further)?\.?$/i,
+  /^(can you )?elaborate\.?$/i,
+  /^give (me )?an example\.?$/i,
+  /^(what|how) do you mean\??$/i,
+  /^(can you )?say more\.?$/i,
+  /^how so\??$/i,
+  /^go on\.?$/i,
+  /^more\.?$/i,
+];
+
 @Injectable()
 export class QaService {
   private readonly logger = new Logger(QaService.name);
@@ -107,19 +123,34 @@ export class QaService {
     const session = await this.sessionService.getSession(phone);
     const subject = this.determineSubject(subjectOverride, session, question, user.subjects);
     const filter: VectorSearchFilter = { subject, level: user.level };
+    const conversationHistory = session?.conversationHistory ?? [];
+    const isFollowUp = this.isFollowUpQuestion(question);
 
-    const cached = await this.responseCache.getCached(question, filter);
-    if (cached) {
-      // A cache hit skips vector search + LLM generation entirely, but the
-      // interaction still gets logged and history updated as if it were a
-      // fresh answer - no topic is available from a cache hit, so it falls
-      // back to 'General' same as any other missing-topic case.
-      await this.logInteraction(phone, subject, undefined, question, cached.join(' '));
-      await this.updateConversationHistory(phone, session, question, cached.join(' '));
-      return cached;
+    // Follow-ups are only meaningful in light of the previous exchange, so
+    // the same literal text (e.g. "why?") can have a completely different
+    // correct answer across conversations - they must never be served from,
+    // or written to, the cache, which is keyed on question text + filter alone.
+    if (!isFollowUp) {
+      const cached = await this.responseCache.getCached(question, filter);
+      if (cached) {
+        // A cache hit skips vector search + LLM generation entirely, but the
+        // interaction still gets logged and history updated as if it were a
+        // fresh answer - no topic is available from a cache hit, so it falls
+        // back to 'General' same as any other missing-topic case.
+        await this.logInteraction(phone, subject, undefined, question, cached.join(' '));
+        await this.updateConversationHistory(phone, session, question, cached.join(' '));
+        return cached;
+      }
     }
 
-    const results = await this.vectorSearchService.search(question, filter);
+    // A bare follow-up like "why?" has no topical content of its own to embed
+    // and search on - augmenting it with the prior question gives retrieval
+    // something real to work with, while the LLM still sees the natural,
+    // unmodified follow-up as the user's message (it already has full history).
+    const searchQuery = isFollowUp
+      ? this.buildFollowUpSearchQuery(question, conversationHistory)
+      : question;
+    const results = await this.vectorSearchService.search(searchQuery, filter);
 
     if (results.length === 0) {
       this.logger.log(`No vector search results for ${phone} (subject=${subject})`);
@@ -134,16 +165,32 @@ export class QaService {
 
     const answer = await this.llmService.generate(systemPrompt, userMessage, {
       complexity: 'complex',
-      conversationHistory: session?.conversationHistory ?? [],
+      conversationHistory,
     });
 
     const formattedParts = this.responseFormatter.formatForWhatsApp(answer);
 
     await this.logInteraction(phone, subject, results[0]?.topic, question, answer);
     await this.updateConversationHistory(phone, session, question, answer);
-    await this.responseCache.setCache(question, filter, formattedParts);
+
+    if (!isFollowUp) {
+      await this.responseCache.setCache(question, filter, formattedParts);
+    }
 
     return formattedParts;
+  }
+
+  private isFollowUpQuestion(question: string): boolean {
+    const trimmed = question.trim();
+    return FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(trimmed));
+  }
+
+  private buildFollowUpSearchQuery(
+    question: string,
+    conversationHistory: ConversationMessage[],
+  ): string {
+    const lastUserMessage = [...conversationHistory].reverse().find((msg) => msg.role === 'user');
+    return lastUserMessage ? `${lastUserMessage.content} ${question}` : question;
   }
 
   private determineSubject(
