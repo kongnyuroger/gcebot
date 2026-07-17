@@ -33,7 +33,13 @@
     "selectSubject": "Sur quelle matière voulez-vous poser une question ?",
     "selectSubjectListButton": "Choisir une matière",
     "selectSubjectSectionTitle": "Vos matières",
-    "noSubjectsRegistered": "Vous n'avez pas encore choisi de matières. Envoyez /settings pour choisir votre niveau et vos matières d'abord."
+    "noSubjectsRegistered": "Vous n'avez pas encore choisi de matières. Envoyez /settings pour choisir votre niveau et vos matières d'abord.",
+    "askAnything": "Parfait ! Posez-moi n'importe quelle question sur {{subject}}. Tapez votre question 👇",
+    "thinking": "Je réfléchis... 🤔",
+    "followUpPrompt": "Que souhaitez-vous faire ensuite ?",
+    "askAnother": "Poser une autre question",
+    "askAnotherPrompt": "👇 Allez-y, tapez votre prochaine question.",
+    "changeSubject": "Changer de matière"
   },
   "help": {
     "title": "Commandes disponibles :",

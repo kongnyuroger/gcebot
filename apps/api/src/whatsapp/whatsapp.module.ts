@@ -11,6 +11,7 @@ import { WhatsappRateLimitGuard } from './guards/rate-limit.guard';
 import { SessionModule } from '../session/session.module';
 import { UsersModule } from '../users/users.module';
 import { I18nModule } from '../i18n/i18n.module';
+import { RagModule } from '../rag/rag.module';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
@@ -21,6 +22,7 @@ import { QaModeHandler } from '../handlers/qa-mode.handler';
     SessionModule,
     UsersModule,
     I18nModule,
+    RagModule,
   ],
   controllers: [WhatsappController],
   providers: [

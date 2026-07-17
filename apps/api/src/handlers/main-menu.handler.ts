@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConversationState } from '@gcebot/shared';
 import { Language } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
@@ -22,6 +22,10 @@ export class MainMenuHandler {
     private readonly stateTransitionService: StateTransitionService,
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
+    // QaModeHandler also depends on MainMenuHandler (for the "Main menu"
+    // follow-up button after answering a question) - forwardRef breaks the
+    // resulting circular DI edge.
+    @Inject(forwardRef(() => QaModeHandler))
     private readonly qaModeHandler: QaModeHandler,
   ) {}
 
