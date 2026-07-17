@@ -59,7 +59,7 @@ export class ResponseFormatterService {
   }
 
   private splitBySentenceBudget(text: string): string[] {
-    const sentences = text.match(/[^.!?]+[.!?]+(\s+|$)/g) ?? [text];
+    const sentences = this.extractSentences(text);
     const parts: string[] = [];
     let current = '';
 
@@ -91,6 +91,17 @@ export class ResponseFormatterService {
     }
 
     return parts;
+  }
+
+  private extractSentences(text: string): string[] {
+    // The regex only matches text ending in ./!/? - a trailing fragment with
+    // no terminal punctuation (e.g. a "[Source: ..., YYYY]" citation with
+    // nothing after it, which is exactly how Rule 4 in the assembled prompt
+    // has the LLM end its answers) would otherwise be silently dropped rather
+    // than carried into its own part.
+    const matches = text.match(/[^.!?]+[.!?]+(\s+|$)/g) ?? [];
+    const remainder = text.slice(matches.join('').length);
+    return remainder.length > 0 ? [...matches, remainder] : matches.length > 0 ? matches : [text];
   }
 
   private stripMarkdown(text: string): string {
