@@ -29,6 +29,12 @@
   "settings": {
     "resetting": "Let's update your level and subjects."
   },
+  "qa": {
+    "selectSubject": "Which subject would you like to ask about?",
+    "selectSubjectListButton": "Choose a subject",
+    "selectSubjectSectionTitle": "Your subjects",
+    "noSubjectsRegistered": "You haven't picked any subjects yet. Send /settings to choose your level and subjects first."
+  },
   "help": {
     "title": "Available commands:",
     "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"

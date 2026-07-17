@@ -29,6 +29,12 @@
   "settings": {
     "resetting": "Mettons à jour votre niveau et vos matières."
   },
+  "qa": {
+    "selectSubject": "Sur quelle matière voulez-vous poser une question ?",
+    "selectSubjectListButton": "Choisir une matière",
+    "selectSubjectSectionTitle": "Vos matières",
+    "noSubjectsRegistered": "Vous n'avez pas encore choisi de matières. Envoyez /settings pour choisir votre niveau et vos matières d'abord."
+  },
   "help": {
     "title": "Commandes disponibles :",
     "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
