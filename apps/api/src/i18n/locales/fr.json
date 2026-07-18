@@ -43,6 +43,29 @@
     "noActiveQuestion": "Posez d'abord une question, ensuite je pourrai vous donner un indice !",
     "quotaExceeded": "Vous avez utilisé vos 10 questions gratuites aujourd'hui 📚 Passez à Basic (1500 FCFA/mois) pour des questions illimitées ! Envoyez /subscribe pour mettre à niveau."
   },
+  "practice": {
+    "selectSubject": "Sur quelle matière voulez-vous vous entraîner ?",
+    "selectSubjectListButton": "Choisir une matière",
+    "selectSubjectSectionTitle": "Vos matières",
+    "noSubjectsRegistered": "Vous n'avez pas encore choisi de matières. Envoyez /settings pour choisir votre niveau et vos matières d'abord.",
+    "selectTopic": "Quel sujet ?",
+    "selectTopicListButton": "Choisir un sujet",
+    "selectTopicSectionTitle": "Sujets",
+    "allTopics": "Tous les sujets",
+    "noTopicsAvailable": "Aucune épreuve passée n'est encore disponible pour {{subject}}. Essayez une autre matière.",
+    "selectYearRange": "Quelle période ?",
+    "selectYearRangeListButton": "Choisir une période",
+    "selectYearRangeSectionTitle": "Période",
+    "yearRange2020to2025": "2020-2025",
+    "yearRange2015to2020": "2015-2020",
+    "yearRange2010to2015": "2010-2015",
+    "anyYear": "Toute année",
+    "selectType": "Quel type de question ?",
+    "typeMcq": "Choix multiple",
+    "typeStructured": "Structurée/Dissertation",
+    "anyType": "Peu importe",
+    "fetchingQuestion": "Récupération de votre première question... 📝"
+  },
   "help": {
     "title": "Commandes disponibles :",
     "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/ask - Poser une question\n/hint - Obtenir un indice pour votre question actuelle\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"

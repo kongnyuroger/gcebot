@@ -16,6 +16,7 @@ import { QuotaModule } from '../quota/quota.module';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
+import { PracticeModeHandler } from '../handlers/practice-mode.handler';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { QaModeHandler } from '../handlers/qa-mode.handler';
     OnboardingHandler,
     MainMenuHandler,
     QaModeHandler,
+    PracticeModeHandler,
   ],
   exports: [WhatsappSendService],
 })

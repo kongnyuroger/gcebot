@@ -7,6 +7,7 @@ import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { QaModeHandler } from './qa-mode.handler';
+import { PracticeModeHandler } from './practice-mode.handler';
 
 export const MENU_ROW_ASK_QUESTION = 'ask_question';
 export const MENU_ROW_PRACTICE = 'practice';
@@ -27,6 +28,7 @@ export class MainMenuHandler {
     // resulting circular DI edge.
     @Inject(forwardRef(() => QaModeHandler))
     private readonly qaModeHandler: QaModeHandler,
+    private readonly practiceModeHandler: PracticeModeHandler,
   ) {}
 
   // Deliberately has no session/state side effects of its own - callers decide
@@ -69,8 +71,11 @@ export class MainMenuHandler {
         return this.qaModeHandler.enterQaMode(phone);
 
       case MENU_ROW_PRACTICE:
-        await this.stateTransitionService.transition(phone, ConversationState.PRACTICE_FILTER);
-        return this.sendComingSoon(phone, lang);
+        // PracticeModeHandler owns its own entry into PRACTICE_FILTER (it
+        // resets the whole session, since it must also be reachable from the
+        // global /practice command from any state) - no separate transition()
+        // call needed here, matching the QA_MODE entry pattern above.
+        return this.practiceModeHandler.enterPracticeMode(phone);
 
       case MENU_ROW_MOCK_EXAM:
         await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_SETUP);
