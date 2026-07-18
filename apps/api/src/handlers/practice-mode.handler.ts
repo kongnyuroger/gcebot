@@ -8,6 +8,7 @@ import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PastQuestionService, PastQuestion, QuestionType } from '../practice/past-question.service';
 import { chunk, MAX_LIST_ROWS_PER_MESSAGE } from './subjects.constants';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -28,6 +29,11 @@ export const TYPE_STRUCTURED = 'STRUCTURED';
 export const TYPE_ANY = 'ANY_TYPE';
 const VALID_TYPES = [TYPE_MCQ, TYPE_STRUCTURED, TYPE_ANY];
 
+// Strips the leading "Question N." / "Paper N." boundary markers off a raw
+// chunk before display, since delivery already renders that as its own
+// "Question [N]" header - keeping it in the body would be redundant.
+const QUESTION_PREFIX_PATTERN = /^\s*(?:question\s*\d+|\d+[.)])\s*\.?\s*(?:paper\s*\d+\.?\s*)?/i;
+
 @Injectable()
 export class PracticeModeHandler {
   private readonly logger = new Logger(PracticeModeHandler.name);
@@ -39,6 +45,7 @@ export class PracticeModeHandler {
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
     private readonly prisma: PrismaService,
+    private readonly pastQuestionService: PastQuestionService,
   ) {}
 
   // Reachable both from a MAIN_MENU button tap and the global /practice
@@ -172,10 +179,66 @@ export class PracticeModeHandler {
     });
     await this.stateTransitionService.transition(phone, ConversationState.QUESTION_DELIVERY);
 
-    // Retrieval + delivery is built in Steps 2-3 of this branch - for now
-    // this just confirms the filters were collected and the flow correctly
-    // reached QUESTION_DELIVERY.
-    await this.whatsappSendService.sendText(phone, this.i18n.t('practice.fetchingQuestion', lang));
+    await this.deliverQuestion(phone);
+  }
+
+  // Public: also reused by the "Next Question" follow-up button once
+  // post-answer navigation lands (later step in this branch).
+  async deliverQuestion(phone: string): Promise<void> {
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+    const session = await this.sessionService.getSession(phone);
+    const practice = session?.practice;
+
+    if (!user || !practice?.subject) {
+      this.logger.warn(`deliverQuestion: missing user or practice.subject for ${phone}`);
+      return;
+    }
+
+    const question = await this.pastQuestionService.getQuestion(
+      {
+        subject: practice.subject,
+        level: user.level,
+        topic: practice.topic,
+        yearRange: practice.yearRange,
+        type: practice.type as QuestionType | undefined,
+      },
+      practice.seenIds ?? [],
+    );
+
+    if (!question) {
+      await this.whatsappSendService.sendText(phone, this.i18n.t('practice.noMoreQuestions', lang));
+      return;
+    }
+
+    await this.whatsappSendService.sendText(phone, this.formatQuestion(question, practice.subject));
+
+    await this.sessionService.updateSessionField(phone, 'currentQuestionId', question.chunkId);
+    await this.sessionService.updateSessionField(
+      phone,
+      'currentQuestionText',
+      question.questionText,
+    );
+    await this.sessionService.updateSessionField(
+      phone,
+      'markingSchemeChunkId',
+      question.markingSchemeChunkId,
+    );
+    await this.sessionService.updateSessionField(phone, 'questionType', question.type);
+    await this.sessionService.updateSessionField(phone, 'practice', {
+      ...practice,
+      seenIds: [...(practice.seenIds ?? []), question.chunkId],
+    });
+
+    await this.stateTransitionService.transition(phone, ConversationState.ANSWER_EVALUATION);
+  }
+
+  private formatQuestion(question: PastQuestion, subject: string): string {
+    const yearLabel = question.year ?? '';
+    const numberLabel = question.questionNumber ?? '?';
+    const body = question.questionText.replace(QUESTION_PREFIX_PATTERN, '').trim();
+
+    return `📝 ${yearLabel} ${subject} — Question ${numberLabel}\n\n${body}\n\nType your answer, or /hint for a clue.`;
   }
 
   private async listTopics(subject: string, level: Level): Promise<string[]> {

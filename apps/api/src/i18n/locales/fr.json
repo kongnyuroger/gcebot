@@ -64,7 +64,7 @@
     "typeMcq": "Choix multiple",
     "typeStructured": "Structurée/Dissertation",
     "anyType": "Peu importe",
-    "fetchingQuestion": "Récupération de votre première question... 📝"
+    "noMoreQuestions": "Aucune autre question ne correspond à vos filtres pour le moment. Réessayez /practice avec des filtres différents, ou revenez plus tard."
   },
   "help": {
     "title": "Commandes disponibles :",

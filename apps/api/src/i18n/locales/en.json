@@ -64,7 +64,7 @@
     "typeMcq": "Multiple Choice",
     "typeStructured": "Structured/Essay",
     "anyType": "Any",
-    "fetchingQuestion": "Fetching your first question... 📝"
+    "noMoreQuestions": "No more questions match your filters right now. Try /practice again with different filters, or check back after more content is added."
   },
   "help": {
     "title": "Available commands:",
