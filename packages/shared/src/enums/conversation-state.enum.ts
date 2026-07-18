@@ -29,6 +29,10 @@ export interface SessionContext {
   subject?: string;
   topic?: string;
   currentQuestionId?: string;
+  // The free-text question currently being answered in QA_MODE - distinct from
+  // currentQuestionId (which references a specific Question record in practice
+  // mode), since a QA question has no DB record of its own. Used by /hint.
+  currentQuestionText?: string;
   examId?: string;
   pendingPaymentId?: string;
   conversationHistory?: ConversationMessage[];

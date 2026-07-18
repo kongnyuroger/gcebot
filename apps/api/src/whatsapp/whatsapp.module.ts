@@ -11,8 +11,11 @@ import { WhatsappRateLimitGuard } from './guards/rate-limit.guard';
 import { SessionModule } from '../session/session.module';
 import { UsersModule } from '../users/users.module';
 import { I18nModule } from '../i18n/i18n.module';
+import { RagModule } from '../rag/rag.module';
+import { QuotaModule } from '../quota/quota.module';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
+import { QaModeHandler } from '../handlers/qa-mode.handler';
 
 @Module({
   imports: [
@@ -20,6 +23,8 @@ import { MainMenuHandler } from '../handlers/main-menu.handler';
     SessionModule,
     UsersModule,
     I18nModule,
+    RagModule,
+    QuotaModule,
   ],
   controllers: [WhatsappController],
   providers: [
@@ -32,6 +37,7 @@ import { MainMenuHandler } from '../handlers/main-menu.handler';
     WhatsappRateLimitGuard,
     OnboardingHandler,
     MainMenuHandler,
+    QaModeHandler,
   ],
   exports: [WhatsappSendService],
 })

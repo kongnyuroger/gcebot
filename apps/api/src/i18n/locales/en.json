@@ -29,9 +29,23 @@
   "settings": {
     "resetting": "Let's update your level and subjects."
   },
+  "qa": {
+    "selectSubject": "Which subject would you like to ask about?",
+    "selectSubjectListButton": "Choose a subject",
+    "selectSubjectSectionTitle": "Your subjects",
+    "noSubjectsRegistered": "You haven't picked any subjects yet. Send /settings to choose your level and subjects first.",
+    "askAnything": "Great! Ask me anything about {{subject}}. Type your question 👇",
+    "thinking": "Thinking... 🤔",
+    "followUpPrompt": "What would you like to do next?",
+    "askAnother": "Ask another",
+    "askAnotherPrompt": "👇 Go ahead, type your next question.",
+    "changeSubject": "Change subject",
+    "noActiveQuestion": "Ask a question first, then I can give you a hint!",
+    "quotaExceeded": "You've used all 10 free questions today 📚 Upgrade to Basic (1,500 FCFA/month) for unlimited questions! Send /subscribe to upgrade."
+  },
   "help": {
     "title": "Available commands:",
-    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
   },
   "common": {
     "mainMenu": "Main Menu",
