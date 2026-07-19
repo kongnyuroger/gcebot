@@ -10,6 +10,7 @@ import { I18nService } from '../i18n/i18n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService, PastQuestion, QuestionType } from '../practice/past-question.service';
 import { LlmService } from '../rag/services/llm.service';
+import { ResponseFormatterService } from '../rag/services/response-formatter.service';
 import { chunk, MAX_LIST_ROWS_PER_MESSAGE } from './subjects.constants';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -65,6 +66,30 @@ function buildWrongAnswerPrompt(
   );
 }
 
+function buildEssayFeedbackPrompt(
+  subject: string,
+  question: string,
+  scheme: string,
+  studentAnswer: string,
+): string {
+  return (
+    `Act as a GCE examiner marking this ${subject} answer.\n` +
+    `Question: ${question}\n` +
+    `Marking scheme: ${scheme}\n` +
+    `Student's answer: ${studentAnswer}\n` +
+    'Provide feedback as:\n' +
+    '✅ Points you got right: [list]\n' +
+    '⚠️ Points you missed: [list]\n' +
+    '📊 Estimated mark: [X out of Y]\n' +
+    '💡 One tip to improve: [tip]'
+  );
+}
+
+// Parses the "📊 Estimated mark: X out of Y" (or "X/Y") line the LLM was
+// instructed to produce, to derive a pass/fail boolean for Interaction.correct.
+const ESTIMATED_MARK_PATTERN = /estimated mark:?\s*(\d+)\s*(?:\/|out of)\s*(\d+)/i;
+const PASSING_MARK_RATIO = 0.5;
+
 @Injectable()
 export class PracticeModeHandler {
   private readonly logger = new Logger(PracticeModeHandler.name);
@@ -78,6 +103,7 @@ export class PracticeModeHandler {
     private readonly prisma: PrismaService,
     private readonly pastQuestionService: PastQuestionService,
     private readonly llmService: LlmService,
+    private readonly responseFormatter: ResponseFormatterService,
   ) {}
 
   // Reachable both from a MAIN_MENU button tap and the global /practice
@@ -288,11 +314,81 @@ export class PracticeModeHandler {
       return this.handleMcqAnswer(phone, answerText, session, lang);
     }
 
-    // Structured/essay grading lands in a later step of this branch.
-    await this.whatsappSendService.sendText(
-      phone,
-      this.i18n.t('practice.essayGradingComingSoon', lang),
+    return this.handleEssayAnswer(phone, answerText, session, lang);
+  }
+
+  private async handleEssayAnswer(
+    phone: string,
+    answerText: string,
+    session: SessionContext,
+    lang: Language,
+  ): Promise<void> {
+    const questionText = session.currentQuestionText!;
+    const subject = session.practice?.subject ?? 'Unknown';
+    const topic = session.practice?.topic ?? 'General';
+
+    const schemeChunk = session.markingSchemeChunkId
+      ? await this.prisma.embeddingChunk.findUnique({ where: { id: session.markingSchemeChunkId } })
+      : null;
+
+    if (!schemeChunk) {
+      this.logger.warn(
+        `No marking scheme found for ${phone}'s structured question (markingSchemeChunkId=${session.markingSchemeChunkId})`,
+      );
+      await this.whatsappSendService.sendText(
+        phone,
+        this.i18n.t('practice.essayGradingUnavailable', lang),
+      );
+      await this.prisma.interaction.create({
+        data: {
+          userId: phone,
+          type: InteractionType.PRACTICE,
+          subject,
+          topic,
+          questionText,
+          userAnswer: answerText,
+          correct: null,
+        },
+      });
+      return;
+    }
+
+    const feedback = await this.llmService.generate(
+      buildEssayFeedbackPrompt(subject, questionText, schemeChunk.content, answerText),
+      'Provide feedback on my answer.',
+      { complexity: 'complex' },
     );
+
+    for (const part of this.responseFormatter.formatForWhatsApp(feedback)) {
+      await this.whatsappSendService.sendText(phone, part);
+    }
+
+    await this.prisma.interaction.create({
+      data: {
+        userId: phone,
+        type: InteractionType.PRACTICE,
+        subject,
+        topic,
+        questionText,
+        userAnswer: answerText,
+        correct: this.extractEstimatedCorrectness(feedback),
+      },
+    });
+  }
+
+  private extractEstimatedCorrectness(feedback: string): boolean | null {
+    const match = feedback.match(ESTIMATED_MARK_PATTERN);
+    if (!match) {
+      return null;
+    }
+
+    const scored = Number(match[1]);
+    const total = Number(match[2]);
+    if (!Number.isFinite(scored) || !Number.isFinite(total) || total === 0) {
+      return null;
+    }
+
+    return scored / total >= PASSING_MARK_RATIO;
   }
 
   private async handleMcqAnswer(

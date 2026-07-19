@@ -68,7 +68,7 @@
     "mcqCorrect": "✅ Correct ! {{explanation}}",
     "mcqWrong": "❌ Pas tout à fait. La bonne réponse est {{correctLetter}}. {{explanation}}",
     "mcqGradingUnavailable": "Je n'ai pas pu corriger automatiquement cette question, mais votre réponse a été enregistrée.",
-    "essayGradingComingSoon": "La correction des dissertations est en cours de mise en place - revenez bientôt !"
+    "essayGradingUnavailable": "Je n'ai pas trouvé de barème pour cette question, mais votre réponse a été enregistrée."
   },
   "help": {
     "title": "Commandes disponibles :",
