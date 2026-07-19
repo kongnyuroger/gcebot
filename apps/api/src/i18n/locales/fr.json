@@ -87,7 +87,8 @@
     "startExam": "Commencer l'examen",
     "cancelExam": "Annuler",
     "cancelled": "Pas de problème - votre examen blanc a été annulé.",
-    "startingSoon": "Démarrage de votre examen... (la livraison des questions arrive dans une étape ultérieure de cette branche)"
+    "startingSoon": "Démarrage de votre examen... (la livraison des questions arrive dans une étape ultérieure de cette branche)",
+    "noContentAvailable": "Aucune question passée n'est encore disponible pour créer un examen blanc en {{subject}}. Essayez une autre matière ou revenez plus tard."
   },
   "help": {
     "title": "Commandes disponibles :",

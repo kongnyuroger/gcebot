@@ -1,22 +1,19 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConversationState } from '@gcebot/shared';
-import { Language, SubscriptionTier } from '../../generated/prisma';
+import { Language, Level, SubscriptionTier } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
 import { WhatsappSendService } from '../whatsapp/services/whatsapp-send.service';
 import { SessionService } from '../session/session.service';
 import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
+import { MockPaperService } from '../mock/mock-paper.service';
 import { MainMenuHandler } from './main-menu.handler';
 
 const MAX_SUBJECT_BUTTONS = 3;
 
 export const MOCK_START_EXAM = 'mock_start_exam';
 export const MOCK_CANCEL_EXAM = 'mock_cancel_exam';
-
-// Placeholder shown at the Ready?/Start/Cancel prompt until Step 2's paper
-// assembly determines the real duration for the assembled paper.
-const PLACEHOLDER_DURATION_MINUTES = 90;
 
 const PREMIUM_TIERS: SubscriptionTier[] = [SubscriptionTier.PREMIUM, SubscriptionTier.FAMILY];
 
@@ -30,6 +27,7 @@ export class MockExamHandler {
     private readonly stateTransitionService: StateTransitionService,
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
+    private readonly mockPaperService: MockPaperService,
     // MainMenuHandler already depends on MockExamHandler (to enter
     // MOCK_EXAM_SETUP from the main menu tap) - forwardRef breaks the
     // resulting circular DI edge, same pattern as QA/Practice mode.
@@ -68,10 +66,7 @@ export class MockExamHandler {
     }
 
     if (user.subjects.length === 1) {
-      await this.sessionService.updateSessionField(phone, 'mockExam', {
-        subject: user.subjects[0],
-      });
-      await this.sendReadyPrompt(phone, user.subjects[0], lang);
+      await this.assembleAndPromptReady(phone, user.subjects[0], user.level, lang);
       return;
     }
 
@@ -86,36 +81,82 @@ export class MockExamHandler {
     const session = await this.sessionService.getSession(phone);
 
     if (selectedId === MOCK_START_EXAM) {
-      // Real paper assembly + timer + delivery land in later steps of this
-      // branch - for now this just confirms the flow correctly reaches the
-      // start of MOCK_EXAM_ACTIVE.
+      // Timer + sequential delivery land in later steps of this branch - for
+      // now this just confirms the flow correctly reaches MOCK_EXAM_ACTIVE
+      // with a fully-assembled paper already sitting in session.
       await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_ACTIVE);
       await this.whatsappSendService.sendText(phone, this.i18n.t('mock.startingSoon', lang));
       return;
     }
 
     if (selectedId === MOCK_CANCEL_EXAM) {
+      // Assembly already created the MockExam DB row by this point (it runs
+      // right after subject selection, so the real duration can be shown
+      // here) - discard it so a cancelled-before-it-started attempt doesn't
+      // pollute exam history/reporting.
+      if (session?.examId) {
+        await this.mockPaperService.discardExam(session.examId);
+      }
       await this.stateTransitionService.transition(phone, ConversationState.MAIN_MENU);
       await this.sessionService.updateSessionField(phone, 'mockExam', undefined);
+      await this.sessionService.updateSessionField(phone, 'examId', undefined);
       await this.whatsappSendService.sendText(phone, this.i18n.t('mock.cancelled', lang));
       return this.mainMenuHandler.sendMenu(phone);
     }
 
-    if (selectedId && user?.subjects.includes(selectedId)) {
-      await this.sessionService.updateSessionField(phone, 'mockExam', {
-        ...session?.mockExam,
-        subject: selectedId,
-      });
-      await this.sendReadyPrompt(phone, selectedId, lang);
+    if (selectedId && user && user.subjects.includes(selectedId)) {
+      await this.assembleAndPromptReady(phone, selectedId, user.level, lang);
       return;
     }
 
     this.logger.warn(`Unrecognized mock exam setup selection "${selectedId}" from ${phone}`);
-    if (session?.mockExam?.subject) {
-      await this.sendReadyPrompt(phone, session.mockExam.subject, lang);
+    if (session?.mockExam?.subject && session.mockExam.durationMinutes !== undefined) {
+      await this.sendReadyPrompt(
+        phone,
+        session.mockExam.subject,
+        session.mockExam.durationMinutes,
+        lang,
+      );
       return;
     }
     await this.sendSubjectPrompt(phone, user?.subjects ?? [], lang);
+  }
+
+  private async assembleAndPromptReady(
+    phone: string,
+    subject: string,
+    level: Level,
+    lang: Language,
+  ): Promise<void> {
+    let paper;
+    try {
+      paper = await this.mockPaperService.assemblePaper(phone, subject, level);
+    } catch (error) {
+      this.logger.warn(
+        `Could not assemble a mock exam paper for ${phone} (${subject}, ${level}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      await this.stateTransitionService.transition(phone, ConversationState.MAIN_MENU);
+      await this.sessionService.updateSessionField(phone, 'mockExam', undefined);
+      await this.whatsappSendService.sendText(
+        phone,
+        this.i18n.t('mock.noContentAvailable', lang, { subject }),
+      );
+      return this.mainMenuHandler.sendMenu(phone);
+    }
+
+    await this.sessionService.updateSessionField(phone, 'examId', paper.examId);
+    await this.sessionService.updateSessionField(phone, 'mockExam', {
+      subject,
+      paperType: paper.paperType,
+      durationMinutes: paper.durationMinutes,
+      questions: paper.questions,
+      currentIndex: 0,
+      answers: [],
+    });
+
+    await this.sendReadyPrompt(phone, subject, paper.durationMinutes, lang);
   }
 
   private async sendSubjectPrompt(
@@ -147,13 +188,15 @@ export class MockExamHandler {
     );
   }
 
-  private async sendReadyPrompt(phone: string, subject: string, lang: Language): Promise<void> {
+  private async sendReadyPrompt(
+    phone: string,
+    subject: string,
+    durationMinutes: number,
+    lang: Language,
+  ): Promise<void> {
     await this.whatsappSendService.sendButtons(
       phone,
-      this.i18n.t('mock.readyPrompt', lang, {
-        subject,
-        duration: String(PLACEHOLDER_DURATION_MINUTES),
-      }),
+      this.i18n.t('mock.readyPrompt', lang, { subject, duration: String(durationMinutes) }),
       [
         { id: MOCK_START_EXAM, title: this.i18n.t('mock.startExam', lang) },
         { id: MOCK_CANCEL_EXAM, title: this.i18n.t('mock.cancelExam', lang) },

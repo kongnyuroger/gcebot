@@ -14,6 +14,7 @@ import { I18nModule } from '../i18n/i18n.module';
 import { RagModule } from '../rag/rag.module';
 import { QuotaModule } from '../quota/quota.module';
 import { PracticeModule } from '../practice/practice.module';
+import { MockModule } from '../mock/mock.module';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
@@ -29,6 +30,7 @@ import { MockExamHandler } from '../handlers/mock-exam.handler';
     RagModule,
     QuotaModule,
     PracticeModule,
+    MockModule,
   ],
   controllers: [WhatsappController],
   providers: [
