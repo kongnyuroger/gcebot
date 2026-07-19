@@ -64,7 +64,11 @@
     "typeMcq": "Multiple Choice",
     "typeStructured": "Structured/Essay",
     "anyType": "Any",
-    "noMoreQuestions": "No more questions match your filters right now. Try /practice again with different filters, or check back after more content is added."
+    "noMoreQuestions": "No more questions match your filters right now. Try /practice again with different filters, or check back after more content is added.",
+    "mcqCorrect": "✅ Correct! {{explanation}}",
+    "mcqWrong": "❌ Not quite. The correct answer is {{correctLetter}}. {{explanation}}",
+    "mcqGradingUnavailable": "I couldn't automatically grade this question, but I've recorded your answer.",
+    "essayGradingComingSoon": "Essay/structured grading is being set up - check back soon!"
   },
   "help": {
     "title": "Available commands:",

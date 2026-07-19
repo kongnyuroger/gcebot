@@ -64,7 +64,11 @@
     "typeMcq": "Choix multiple",
     "typeStructured": "Structurée/Dissertation",
     "anyType": "Peu importe",
-    "noMoreQuestions": "Aucune autre question ne correspond à vos filtres pour le moment. Réessayez /practice avec des filtres différents, ou revenez plus tard."
+    "noMoreQuestions": "Aucune autre question ne correspond à vos filtres pour le moment. Réessayez /practice avec des filtres différents, ou revenez plus tard.",
+    "mcqCorrect": "✅ Correct ! {{explanation}}",
+    "mcqWrong": "❌ Pas tout à fait. La bonne réponse est {{correctLetter}}. {{explanation}}",
+    "mcqGradingUnavailable": "Je n'ai pas pu corriger automatiquement cette question, mais votre réponse a été enregistrée.",
+    "essayGradingComingSoon": "La correction des dissertations est en cours de mise en place - revenez bientôt !"
   },
   "help": {
     "title": "Commandes disponibles :",

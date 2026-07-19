@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConversationState } from '@gcebot/shared';
-import { DocType, Language, Level } from '../../generated/prisma';
+import { ConversationState, SessionContext } from '@gcebot/shared';
+import { DocType, InteractionType, Language, Level } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
 import { WhatsappSendService, WhatsAppListRow } from '../whatsapp/services/whatsapp-send.service';
 import { SessionService } from '../session/session.service';
@@ -9,6 +9,7 @@ import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService, PastQuestion, QuestionType } from '../practice/past-question.service';
+import { LlmService } from '../rag/services/llm.service';
 import { chunk, MAX_LIST_ROWS_PER_MESSAGE } from './subjects.constants';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -34,6 +35,36 @@ const VALID_TYPES = [TYPE_MCQ, TYPE_STRUCTURED, TYPE_ANY];
 // "Question [N]" header - keeping it in the body would be redundant.
 const QUESTION_PREFIX_PATTERN = /^\s*(?:question\s*\d+|\d+[.)])\s*\.?\s*(?:paper\s*\d+\.?\s*)?/i;
 
+// Matches option lines like "A. x=5" or "B) 10" at the start of a line.
+const OPTION_LINE_PATTERN = /(?:^|\n)\s*([A-D])[.)]\s*([^\n]+)/g;
+
+// A bare letter answer, optionally wrapped in punctuation: "A", "a)", "(A)", "A.".
+const BARE_LETTER_PATTERN = /^\(?([A-D])\)?\.?$/i;
+
+// Best-effort extraction of the correct letter from marking scheme text -
+// real scheme phrasing is unknown until content is actually ingested, so this
+// covers the common phrasings ("Correct answer: A", "Answer: B", "Ans: C").
+const CORRECT_ANSWER_PATTERNS = [
+  /correct\s+answer\s*(?:is|:)?\s*\(?([A-D])\)?/i,
+  /\banswer\s*(?:is|:)?\s*\(?([A-D])\)?/i,
+  /\bans\s*(?:is|:)?\s*\(?([A-D])\)?/i,
+];
+
+function buildWrongAnswerPrompt(
+  subject: string,
+  question: string,
+  scheme: string,
+  studentAnswer: string,
+  correctLetter: string,
+): string {
+  return (
+    `Act as a GCE examiner marking a multiple-choice ${subject} question. ` +
+    `Question: ${question}\nMarking scheme: ${scheme}\nStudent's answer: ${studentAnswer}\n` +
+    `Correct answer: ${correctLetter}\n` +
+    `Explain the concept and why ${correctLetter} is correct. Keep it to 1-3 sentences.`
+  );
+}
+
 @Injectable()
 export class PracticeModeHandler {
   private readonly logger = new Logger(PracticeModeHandler.name);
@@ -46,6 +77,7 @@ export class PracticeModeHandler {
     private readonly i18n: I18nService,
     private readonly prisma: PrismaService,
     private readonly pastQuestionService: PastQuestionService,
+    private readonly llmService: LlmService,
   ) {}
 
   // Reachable both from a MAIN_MENU button tap and the global /practice
@@ -231,6 +263,160 @@ export class PracticeModeHandler {
     });
 
     await this.stateTransitionService.transition(phone, ConversationState.ANSWER_EVALUATION);
+  }
+
+  // Free text while ANSWER_EVALUATION - dispatches to MCQ auto-grading or
+  // essay/structured feedback based on the delivered question's actual type.
+  async handleAnswer(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const answerText = message.text?.trim();
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+    const session = await this.sessionService.getSession(phone);
+
+    if (!answerText) {
+      this.logger.warn(`Non-text message from ${phone} while ANSWER_EVALUATION; ignoring`);
+      return;
+    }
+
+    if (!session?.currentQuestionText || !session.questionType) {
+      this.logger.warn(`handleAnswer: no active question in session for ${phone}`);
+      return;
+    }
+
+    if (session.questionType === TYPE_MCQ) {
+      return this.handleMcqAnswer(phone, answerText, session, lang);
+    }
+
+    // Structured/essay grading lands in a later step of this branch.
+    await this.whatsappSendService.sendText(
+      phone,
+      this.i18n.t('practice.essayGradingComingSoon', lang),
+    );
+  }
+
+  private async handleMcqAnswer(
+    phone: string,
+    answerText: string,
+    session: SessionContext,
+    lang: Language,
+  ): Promise<void> {
+    const questionText = session.currentQuestionText!;
+    const options = this.parseOptions(questionText);
+    const studentLetter = this.normalizeStudentAnswer(answerText, options);
+
+    const schemeChunk = session.markingSchemeChunkId
+      ? await this.prisma.embeddingChunk.findUnique({ where: { id: session.markingSchemeChunkId } })
+      : null;
+    const correctLetter = schemeChunk ? this.extractCorrectAnswerLetter(schemeChunk.content) : null;
+
+    const subject = session.practice?.subject ?? 'Unknown';
+    const topic = session.practice?.topic ?? 'General';
+
+    if (!correctLetter) {
+      this.logger.warn(
+        `Could not determine the correct MCQ answer for ${phone} (markingSchemeChunkId=${session.markingSchemeChunkId})`,
+      );
+      await this.whatsappSendService.sendText(
+        phone,
+        this.i18n.t('practice.mcqGradingUnavailable', lang),
+      );
+      await this.prisma.interaction.create({
+        data: {
+          userId: phone,
+          type: InteractionType.PRACTICE,
+          subject,
+          topic,
+          questionText,
+          userAnswer: answerText,
+          correct: null,
+        },
+      });
+      return;
+    }
+
+    const isCorrect = studentLetter !== null && studentLetter === correctLetter;
+    const schemeExplanation = this.extractSchemeExplanation(schemeChunk!.content);
+
+    const feedback = isCorrect
+      ? this.i18n.t('practice.mcqCorrect', lang, { explanation: schemeExplanation })
+      : this.i18n.t('practice.mcqWrong', lang, {
+          correctLetter,
+          // Wrong answers get a real LLM explanation of the concept, not just
+          // the raw scheme text - this is the actual teaching moment.
+          explanation: await this.llmService.generate(
+            buildWrongAnswerPrompt(
+              subject,
+              questionText,
+              schemeChunk!.content,
+              answerText,
+              correctLetter,
+            ),
+            'Explain why my answer was wrong.',
+            { complexity: 'simple' },
+          ),
+        });
+
+    await this.whatsappSendService.sendText(phone, feedback);
+
+    await this.prisma.interaction.create({
+      data: {
+        userId: phone,
+        type: InteractionType.PRACTICE,
+        subject,
+        topic,
+        questionText,
+        userAnswer: answerText,
+        correct: isCorrect,
+      },
+    });
+  }
+
+  private parseOptions(questionText: string): Record<string, string> {
+    const options: Record<string, string> = {};
+    for (const match of questionText.matchAll(OPTION_LINE_PATTERN)) {
+      options[match[1].toUpperCase()] = match[2].trim();
+    }
+    return options;
+  }
+
+  private normalizeStudentAnswer(
+    rawAnswer: string,
+    options: Record<string, string>,
+  ): string | null {
+    const bareLetterMatch = rawAnswer.match(BARE_LETTER_PATTERN);
+    if (bareLetterMatch) {
+      return bareLetterMatch[1].toUpperCase();
+    }
+
+    const lowerAnswer = rawAnswer.toLowerCase();
+    for (const [letter, text] of Object.entries(options)) {
+      const lowerText = text.toLowerCase();
+      if (
+        lowerText === lowerAnswer ||
+        lowerText.includes(lowerAnswer) ||
+        lowerAnswer.includes(lowerText)
+      ) {
+        return letter;
+      }
+    }
+
+    return null;
+  }
+
+  private extractCorrectAnswerLetter(schemeContent: string): string | null {
+    for (const pattern of CORRECT_ANSWER_PATTERNS) {
+      const match = schemeContent.match(pattern);
+      if (match) {
+        return match[1].toUpperCase();
+      }
+    }
+    return null;
+  }
+
+  private extractSchemeExplanation(schemeContent: string): string {
+    const stripped = schemeContent.replace(QUESTION_PREFIX_PATTERN, '').trim();
+    return stripped.length > 0 ? stripped : 'See the marking scheme for details.';
   }
 
   private formatQuestion(question: PastQuestion, subject: string): string {
