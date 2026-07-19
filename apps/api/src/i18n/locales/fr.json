@@ -119,7 +119,8 @@
     "weeklyReport": "📅 *Votre rapport hebdomadaire*\n\nCette semaine : {{questions}} questions\nMeilleure matière : {{bestSubject}}\nÀ travailler : {{focusArea}}\nSérie : {{streak}} jours 🔥\n\n💡 {{tip}}",
     "weeklyNoData": "Aucune activité cette semaine",
     "weeklyTipNoActivity": "On ne vous a pas vu cette semaine - revenez répondre à quelques questions pour garder votre série active !",
-    "weeklyTipFallback": "Continuez à vous entraîner régulièrement avec des épreuves passées - la régularité compte plus que le bachotage."
+    "weeklyTipFallback": "Continuez à vous entraîner régulièrement avec des épreuves passées - la régularité compte plus que le bachotage.",
+    "milestoneCelebration": "🎉 Série de {{days}} jours ! Vous êtes en feu ! Voici 7 jours de Premium offerts 🎁"
   },
   "common": {
     "mainMenu": "Menu principal",

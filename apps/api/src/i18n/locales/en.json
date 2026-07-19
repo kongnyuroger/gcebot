@@ -119,7 +119,8 @@
     "weeklyReport": "📅 *Your Weekly Report*\n\nThis week: {{questions}} questions\nBest subject: {{bestSubject}}\nFocus area: {{focusArea}}\nStreak: {{streak}} days 🔥\n\n💡 {{tip}}",
     "weeklyNoData": "No activity this week",
     "weeklyTipNoActivity": "We haven't seen you this week - come back and answer a few questions to keep your streak alive!",
-    "weeklyTipFallback": "Keep practicing past questions regularly - consistency matters more than cramming."
+    "weeklyTipFallback": "Keep practicing past questions regularly - consistency matters more than cramming.",
+    "milestoneCelebration": "🎉 {{days}}-day streak! You're on fire! Here's 7 days of Premium on us 🎁"
   },
   "common": {
     "mainMenu": "Main Menu",

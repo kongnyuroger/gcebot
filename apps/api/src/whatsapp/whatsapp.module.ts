@@ -26,6 +26,7 @@ import { PracticeModeHandler } from '../handlers/practice-mode.handler';
 import { MockExamHandler } from '../handlers/mock-exam.handler';
 import { ProgressHandler } from '../handlers/progress.handler';
 import { WeeklyReportService } from '../progress/weekly-report.service';
+import { MilestoneService } from '../progress/milestone.service';
 
 @Module({
   imports: [
@@ -65,6 +66,8 @@ import { WeeklyReportService } from '../progress/weekly-report.service';
     // ProgressModule would be circular, since WhatsappModule already imports
     // ProgressModule for StreakService).
     WeeklyReportService,
+    // Same WhatsappSendService reasoning as WeeklyReportService above.
+    MilestoneService,
   ],
   exports: [WhatsappSendService],
 })
