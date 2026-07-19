@@ -3,15 +3,10 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Level, Language, SubscriptionTier, User, Prisma } from '../../generated/prisma';
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const REFERRAL_CODE_GENERATION_ATTEMPTS = 5;
 
 function generateReferralCode(): string {
   return randomBytes(4).toString('hex').toUpperCase();
-}
-
-function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function isUniqueConstraintViolation(error: unknown, field: string): boolean {
@@ -85,32 +80,5 @@ export class UsersService {
 
   async updateLanguage(phone: string, language: Language): Promise<User> {
     return this.prisma.user.update({ where: { phone_number: phone }, data: { language } });
-  }
-
-  async recordActivity(phone: string): Promise<User> {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { phone_number: phone } });
-    const now = new Date();
-    const today = startOfUtcDay(now);
-    const lastActive = user.lastActiveDate ? startOfUtcDay(user.lastActiveDate) : null;
-
-    let streakDays = user.streakDays;
-
-    if (!lastActive) {
-      streakDays = 1;
-    } else {
-      const diffDays = Math.round((today.getTime() - lastActive.getTime()) / MS_PER_DAY);
-
-      if (diffDays === 1) {
-        streakDays += 1;
-      } else if (diffDays > 1) {
-        streakDays = 1;
-      }
-      // diffDays === 0: already recorded today, streak unchanged
-    }
-
-    return this.prisma.user.update({
-      where: { phone_number: phone },
-      data: { lastActiveDate: now, streakDays },
-    });
   }
 }

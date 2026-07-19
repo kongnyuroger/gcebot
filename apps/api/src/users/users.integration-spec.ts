@@ -71,30 +71,4 @@ describe('UsersService (integration)', () => {
     const profile = await service.getUserProfile(phone);
     expect(profile?.subscription?.tier).toBe('PREMIUM');
   });
-
-  it('increments the streak correctly across activity gaps', async () => {
-    await service.upsertUser(phone);
-
-    const first = await service.recordActivity(phone);
-    expect(first.streakDays).toBe(1);
-
-    const sameDay = await service.recordActivity(phone);
-    expect(sameDay.streakDays).toBe(1);
-
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    await prisma.user.update({
-      where: { phone_number: phone },
-      data: { lastActiveDate: yesterday },
-    });
-    const consecutiveDay = await service.recordActivity(phone);
-    expect(consecutiveDay.streakDays).toBe(2);
-
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    await prisma.user.update({
-      where: { phone_number: phone },
-      data: { lastActiveDate: threeDaysAgo, streakDays: 5 },
-    });
-    const brokenStreak = await service.recordActivity(phone);
-    expect(brokenStreak.streakDays).toBe(1);
-  });
 });

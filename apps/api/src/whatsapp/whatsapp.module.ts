@@ -16,6 +16,7 @@ import { RagModule } from '../rag/rag.module';
 import { QuotaModule } from '../quota/quota.module';
 import { PracticeModule } from '../practice/practice.module';
 import { MockModule } from '../mock/mock.module';
+import { ProgressModule } from '../progress/progress.module';
 import { MOCK_EXAM_TIMER_QUEUE_NAME } from '../mock/queues/mock-exam-timer.queue';
 import { MockExamTimerProcessor } from '../mock/processors/mock-exam-timer.processor';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
@@ -35,6 +36,7 @@ import { ProgressHandler } from '../handlers/progress.handler';
     QuotaModule,
     PracticeModule,
     MockModule,
+    ProgressModule,
     // See mock.module.ts's comment: registered here too so
     // MockExamTimerProcessor (which needs WhatsappSendService, only
     // available in this module) can consume the same named queue.
