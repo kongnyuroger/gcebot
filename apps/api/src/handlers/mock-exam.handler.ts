@@ -12,6 +12,8 @@ import { MockTimerService } from '../mock/mock-timer.service';
 import { MockGradingService } from '../mock/mock-grading.service';
 import { MockReportService } from '../mock/mock-report.service';
 import { QUESTION_PREFIX_PATTERN } from '../practice/mcq-grading.util';
+import { StreakService } from '../progress/streak.service';
+import { MilestoneService } from '../progress/milestone.service';
 import { MainMenuHandler } from './main-menu.handler';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -35,6 +37,8 @@ export class MockExamHandler {
     private readonly mockTimerService: MockTimerService,
     private readonly mockGradingService: MockGradingService,
     private readonly mockReportService: MockReportService,
+    private readonly streakService: StreakService,
+    private readonly milestoneService: MilestoneService,
     // MainMenuHandler already depends on MockExamHandler (to enter
     // MOCK_EXAM_SETUP from the main menu tap) - forwardRef breaks the
     // resulting circular DI edge, same pattern as QA/Practice mode.
@@ -214,6 +218,8 @@ export class MockExamHandler {
     const user = await this.usersService.getUserProfile(phone);
     const lang = user?.language ?? Language.EN;
 
+    await this.recordActivity(phone);
+
     await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_REPORT);
     await this.whatsappSendService.sendText(phone, this.i18n.t('mock.submitted', lang));
 
@@ -381,5 +387,17 @@ export class MockExamHandler {
         { id: MOCK_CANCEL_EXAM, title: this.i18n.t('mock.cancelExam', lang) },
       ],
     );
+  }
+
+  // Best-effort: a streak/milestone failure shouldn't block exam submission.
+  private async recordActivity(phone: string): Promise<void> {
+    try {
+      const updatedUser = await this.streakService.recordActivity(phone);
+      await this.milestoneService.checkMilestone(updatedUser);
+    } catch (error) {
+      this.logger.error(
+        `recordActivity failed for ${phone}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

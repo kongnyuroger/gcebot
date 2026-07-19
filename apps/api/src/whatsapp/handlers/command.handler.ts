@@ -10,6 +10,7 @@ import { OnboardingHandler } from '../../handlers/onboarding.handler';
 import { QaModeHandler } from '../../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../../handlers/practice-mode.handler';
 import { MockExamHandler } from '../../handlers/mock-exam.handler';
+import { ProgressHandler } from '../../handlers/progress.handler';
 
 @Injectable()
 export class CommandHandler {
@@ -24,6 +25,7 @@ export class CommandHandler {
     private readonly qaModeHandler: QaModeHandler,
     private readonly practiceModeHandler: PracticeModeHandler,
     private readonly mockExamHandler: MockExamHandler,
+    private readonly progressHandler: ProgressHandler,
   ) {}
 
   async handle(message: ParsedMessage, commandName: string): Promise<void> {
@@ -54,6 +56,8 @@ export class CommandHandler {
         return this.mockExamHandler.handleSkip(phone);
       case 'submit':
         return this.mockExamHandler.submitExam(phone);
+      case 'progress':
+        return this.progressHandler.showProgress(phone);
       default:
         this.logger.warn(`Unknown command "/${commandName}" from ${phone}`);
         return this.handleUnknownCommand(phone, lang);

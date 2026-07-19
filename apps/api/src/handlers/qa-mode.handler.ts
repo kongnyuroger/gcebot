@@ -10,6 +10,8 @@ import { I18nService } from '../i18n/i18n.service';
 import { QaService } from '../rag/services/qa.service';
 import { LlmService } from '../rag/services/llm.service';
 import { QuotaService } from '../quota/quota.service';
+import { StreakService } from '../progress/streak.service';
+import { MilestoneService } from '../progress/milestone.service';
 import { MainMenuHandler } from './main-menu.handler';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -38,6 +40,8 @@ export class QaModeHandler {
     private readonly qaService: QaService,
     private readonly llmService: LlmService,
     private readonly quotaService: QuotaService,
+    private readonly streakService: StreakService,
+    private readonly milestoneService: MilestoneService,
     // MainMenuHandler already depends on QaModeHandler (to enter QA_MODE from
     // the main menu tap) - forwardRef breaks the resulting circular DI edge,
     // since this handler also needs MainMenuHandler.sendMenu() for the
@@ -112,6 +116,8 @@ export class QaModeHandler {
       await this.whatsappSendService.sendText(phone, this.i18n.t('qa.quotaExceeded', lang));
       return;
     }
+
+    await this.recordActivity(phone);
 
     await this.whatsappSendService.markAsRead(message.messageId);
     await this.whatsappSendService.sendText(phone, this.i18n.t('qa.thinking', lang));
@@ -218,5 +224,18 @@ export class QaModeHandler {
         },
       ],
     );
+  }
+
+  // Best-effort: a streak/milestone failure shouldn't block the student from
+  // getting their actual answer.
+  private async recordActivity(phone: string): Promise<void> {
+    try {
+      const updatedUser = await this.streakService.recordActivity(phone);
+      await this.milestoneService.checkMilestone(updatedUser);
+    } catch (error) {
+      this.logger.error(
+        `recordActivity failed for ${phone}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

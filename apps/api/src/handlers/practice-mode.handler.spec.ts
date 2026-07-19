@@ -10,6 +10,8 @@ import { LlmService } from '../rag/services/llm.service';
 import { ResponseFormatterService } from '../rag/services/response-formatter.service';
 import { TopicWeaknessService } from '../practice/topic-weakness.service';
 import { TopicScoreService } from '../practice/topic-score.service';
+import { StreakService } from '../progress/streak.service';
+import { MilestoneService } from '../progress/milestone.service';
 import { MainMenuHandler } from './main-menu.handler';
 import { PracticeModeHandler } from './practice-mode.handler';
 
@@ -75,6 +77,8 @@ describe('PracticeModeHandler - MCQ grading', () => {
       new ResponseFormatterService(),
       {} as unknown as TopicWeaknessService,
       { recordResult } as unknown as TopicScoreService,
+      { recordActivity: jest.fn() } as unknown as StreakService,
+      { checkMilestone: jest.fn() } as unknown as MilestoneService,
       { sendMenu: jest.fn() } as unknown as MainMenuHandler,
     );
   });

@@ -8,6 +8,7 @@ import { I18nService } from '../i18n/i18n.service';
 import { QaModeHandler } from './qa-mode.handler';
 import { PracticeModeHandler } from './practice-mode.handler';
 import { MockExamHandler } from './mock-exam.handler';
+import { ProgressHandler } from './progress.handler';
 
 export const MENU_ROW_ASK_QUESTION = 'ask_question';
 export const MENU_ROW_PRACTICE = 'practice';
@@ -36,6 +37,9 @@ export class MainMenuHandler {
     // option during MOCK_EXAM_SETUP) - same forwardRef fix as above.
     @Inject(forwardRef(() => MockExamHandler))
     private readonly mockExamHandler: MockExamHandler,
+    // No forwardRef needed - ProgressHandler doesn't depend back on
+    // MainMenuHandler (showProgress() has no post-answer navigation options).
+    private readonly progressHandler: ProgressHandler,
   ) {}
 
   // Deliberately has no session/state side effects of its own - callers decide
@@ -67,8 +71,6 @@ export class MainMenuHandler {
 
   async handleSelection(message: ParsedMessage): Promise<void> {
     const phone = message.from;
-    const user = await this.usersService.getUserProfile(phone);
-    const lang = user?.language ?? Language.EN;
 
     switch (message.listId) {
       case MENU_ROW_ASK_QUESTION:
@@ -91,16 +93,11 @@ export class MainMenuHandler {
         return this.mockExamHandler.enterMockExam(phone);
 
       case MENU_ROW_PROGRESS:
-        // No /progress command exists yet in this branch - same placeholder.
-        return this.sendComingSoon(phone, lang);
+        return this.progressHandler.showProgress(phone);
 
       default:
         this.logger.warn(`Unrecognized main menu selection "${message.listId}" from ${phone}`);
         return this.sendMenu(phone);
     }
-  }
-
-  private async sendComingSoon(phone: string, lang: Language): Promise<void> {
-    await this.whatsappSendService.sendText(phone, this.i18n.t('menu.comingSoon', lang));
   }
 }
