@@ -87,11 +87,12 @@
     "startExam": "Start Exam",
     "cancelExam": "Cancel",
     "cancelled": "No problem - your mock exam was cancelled.",
-    "startingSoon": "Starting your exam... (question delivery lands in a later step of this branch)",
     "noContentAvailable": "No past questions are available yet to build a {{subject}} mock exam. Try a different subject or check back once more content is added.",
     "thirtyMinWarning": "⏰ 30 minutes remaining",
     "tenMinWarning": "⚠️ 10 minutes left! Start wrapping up.",
-    "autoSubmitStub": "⏰ Time's up! Auto-submitting your exam... (grading lands in a later step of this branch)"
+    "autoSubmitStub": "⏰ Time's up! Auto-submitting your exam... (grading lands in a later step of this branch)",
+    "questionDelivery": "Question {{current}} of {{total}}\n\n{{questionText}}",
+    "submittedStub": "✅ Exam submitted! Grading your answers... (results land in a later step of this branch)"
   },
   "help": {
     "title": "Available commands:",

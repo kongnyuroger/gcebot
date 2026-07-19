@@ -1,5 +1,5 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import { ConversationState, SessionContext } from '@gcebot/shared';
+import { ConversationState, SessionContext, MockExamQuestion } from '@gcebot/shared';
 import { Language, Level, SubscriptionTier } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
 import { WhatsappSendService } from '../whatsapp/services/whatsapp-send.service';
@@ -17,6 +17,14 @@ export const MOCK_START_EXAM = 'mock_start_exam';
 export const MOCK_CANCEL_EXAM = 'mock_cancel_exam';
 
 const PREMIUM_TIERS: SubscriptionTier[] = [SubscriptionTier.PREMIUM, SubscriptionTier.FAMILY];
+
+// Strips the leading "Question N." / "Paper N." boundary markers off a raw
+// chunk before display, since delivery already renders its own "Question X of
+// Y" header - keeping it in the body would be redundant. Same pattern as
+// PracticeModeHandler's identically-named constant (small enough, and
+// specific enough to each caller's exact header format, that duplicating it
+// beats a premature shared-util extraction for just these two call sites).
+const QUESTION_PREFIX_PATTERN = /^\s*(?:question\s*\d+|\d+[.)])\s*\.?\s*(?:paper\s*\d+\.?\s*)?/i;
 
 @Injectable()
 export class MockExamHandler {
@@ -136,17 +144,139 @@ export class MockExamHandler {
     const endTime = Date.now() + durationMinutes * 60_000;
     const timerJobIds = await this.mockTimerService.scheduleTimers(phone, examId, endTime);
 
+    const questions = session?.mockExam?.questions ?? [];
+
     await this.sessionService.updateSessionField(phone, 'mockExam', {
       ...session?.mockExam,
       endTime,
       timerJobIds,
     });
 
-    // Sequential question delivery lands in a later step of this branch - for
-    // now this confirms the flow correctly reaches MOCK_EXAM_ACTIVE with the
-    // timer actually running against a fully-assembled paper in session.
     await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_ACTIVE);
-    await this.whatsappSendService.sendText(phone, this.i18n.t('mock.startingSoon', lang));
+    await this.deliverQuestion(phone, questions, 0, lang);
+  }
+
+  // Free text while MOCK_EXAM_ACTIVE - the student's answer to the current
+  // question. Not yet reachable from a real message (routing lands in a
+  // later step of this branch), but fully functional when called directly.
+  async handleAnswer(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const answerText = message.text?.trim();
+
+    if (!answerText) {
+      this.logger.warn(`Non-text message from ${phone} while MOCK_EXAM_ACTIVE; ignoring`);
+      return;
+    }
+
+    const session = await this.sessionService.getSession(phone);
+    if (!this.hasActiveExam(session)) {
+      this.logger.warn(`handleAnswer: no active mock exam in session for ${phone}`);
+      return;
+    }
+
+    await this.recordAnswerAndAdvance(phone, session!, answerText);
+  }
+
+  // /skip - records a null answer for the current question and advances,
+  // exactly like a real answer except with nothing to grade. Not yet wired
+  // to a real /skip command (routing lands in a later step of this branch).
+  async handleSkip(phone: string): Promise<void> {
+    const session = await this.sessionService.getSession(phone);
+    if (!this.hasActiveExam(session)) {
+      this.logger.warn(`handleSkip: no active mock exam in session for ${phone}`);
+      return;
+    }
+
+    await this.recordAnswerAndAdvance(phone, session!, null);
+  }
+
+  // /submit (early, at any point) - shares the exact same finish-up logic as
+  // both "last question just answered" and the timer's AUTO_SUBMIT job, so
+  // there's exactly one place that cancels timers, transitions state, and
+  // sends the (for now, stubbed) submission confirmation. Not yet wired to a
+  // real /submit command (routing lands in a later step of this branch), but
+  // the AUTO_SUBMIT timer job already calls this directly (see
+  // MockExamTimerProcessor).
+  async submitExam(phone: string): Promise<void> {
+    const session = await this.sessionService.getSession(phone);
+
+    if (session?.state !== ConversationState.MOCK_EXAM_ACTIVE) {
+      // Already submitted via another path (e.g. the student hit /submit at
+      // almost exactly the moment AUTO_SUBMIT's job fired) - nothing to do.
+      this.logger.log(
+        `submitExam: exam for ${phone} is not active (state=${session?.state}); skipping`,
+      );
+      return;
+    }
+
+    const timerJobIds = session.mockExam?.timerJobIds ?? [];
+    if (timerJobIds.length > 0) {
+      await this.mockTimerService.cancelTimers(timerJobIds);
+    }
+
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+
+    await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_REPORT);
+
+    // Real grading + report generation land in later steps of this branch.
+    await this.whatsappSendService.sendText(phone, this.i18n.t('mock.submittedStub', lang));
+  }
+
+  private hasActiveExam(session: SessionContext | null): boolean {
+    return (
+      !!session?.mockExam?.questions &&
+      session.mockExam.questions.length > 0 &&
+      session.mockExam.currentIndex !== undefined
+    );
+  }
+
+  private async recordAnswerAndAdvance(
+    phone: string,
+    session: SessionContext,
+    answer: string | null,
+  ): Promise<void> {
+    const mockExam = session.mockExam!;
+    const questions = mockExam.questions!;
+    const currentIndex = mockExam.currentIndex!;
+    const answers = [...(mockExam.answers ?? [])];
+    answers[currentIndex] = answer;
+
+    const nextIndex = currentIndex + 1;
+    await this.sessionService.updateSessionField(phone, 'mockExam', {
+      ...mockExam,
+      answers,
+      currentIndex: nextIndex,
+    });
+
+    if (nextIndex < questions.length) {
+      const user = await this.usersService.getUserProfile(phone);
+      const lang = user?.language ?? Language.EN;
+      await this.deliverQuestion(phone, questions, nextIndex, lang);
+      return;
+    }
+
+    // Last question just answered/skipped - trigger submit early.
+    await this.submitExam(phone);
+  }
+
+  private async deliverQuestion(
+    phone: string,
+    questions: MockExamQuestion[],
+    index: number,
+    lang: Language,
+  ): Promise<void> {
+    const question = questions[index];
+    const body = question.questionText.replace(QUESTION_PREFIX_PATTERN, '').trim();
+
+    await this.whatsappSendService.sendText(
+      phone,
+      this.i18n.t('mock.questionDelivery', lang, {
+        current: String(index + 1),
+        total: String(questions.length),
+        questionText: body,
+      }),
+    );
   }
 
   private async assembleAndPromptReady(
