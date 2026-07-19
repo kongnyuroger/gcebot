@@ -9,6 +9,7 @@ import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService, PastQuestion, QuestionType } from '../practice/past-question.service';
+import { TopicWeaknessService } from '../practice/topic-weakness.service';
 import { LlmService } from '../rag/services/llm.service';
 import { ResponseFormatterService } from '../rag/services/response-formatter.service';
 import { chunk, MAX_LIST_ROWS_PER_MESSAGE } from './subjects.constants';
@@ -16,6 +17,7 @@ import { chunk, MAX_LIST_ROWS_PER_MESSAGE } from './subjects.constants';
 const MAX_SUBJECT_BUTTONS = 3;
 
 export const TOPIC_ALL = 'ALL_TOPICS';
+export const TOPIC_SURPRISE_ME = 'SURPRISE_ME';
 export const YEAR_RANGE_2020_2025 = '2020-2025';
 export const YEAR_RANGE_2015_2020 = '2015-2020';
 export const YEAR_RANGE_2010_2015 = '2010-2015';
@@ -104,6 +106,7 @@ export class PracticeModeHandler {
     private readonly pastQuestionService: PastQuestionService,
     private readonly llmService: LlmService,
     private readonly responseFormatter: ResponseFormatterService,
+    private readonly topicWeaknessService: TopicWeaknessService,
   ) {}
 
   // Reachable both from a MAIN_MENU button tap and the global /practice
@@ -186,7 +189,19 @@ export class PracticeModeHandler {
       return this.sendTopicPrompt(phone, topics, lang);
     }
 
-    const topic = selectedTopic === TOPIC_ALL ? undefined : selectedTopic;
+    let topic: string | undefined;
+    if (selectedTopic === TOPIC_ALL) {
+      topic = undefined;
+    } else if (selectedTopic === TOPIC_SURPRISE_ME) {
+      topic = await this.pickWeaknessWeightedTopic(
+        phone,
+        session?.practice?.subject ?? '',
+        user?.level ?? Level.O_LEVEL,
+      );
+    } else {
+      topic = selectedTopic;
+    }
+
     await this.sessionService.updateSessionField(phone, 'practice', {
       ...session?.practice,
       topic,
@@ -194,6 +209,27 @@ export class PracticeModeHandler {
     await this.stateTransitionService.transition(phone, ConversationState.PRACTICE_YEAR);
 
     await this.sendYearRangePrompt(phone, lang);
+  }
+
+  // "Surprise Me" - weighted toward the student's weaker topics (<60%
+  // accuracy), but not exclusively; falls back to a plain random topic when
+  // there's no PRACTICE performance history yet for this subject.
+  private async pickWeaknessWeightedTopic(
+    phone: string,
+    subject: string,
+    level: Level,
+  ): Promise<string | undefined> {
+    const weakTopics = await this.topicWeaknessService.getWeakTopics(phone, subject);
+    const weightedPick = this.topicWeaknessService.pickWeightedRandomTopic(weakTopics);
+    if (weightedPick) {
+      return weightedPick;
+    }
+
+    const allTopics = await this.listTopics(subject, level);
+    if (allTopics.length === 0) {
+      return undefined;
+    }
+    return allTopics[Math.floor(Math.random() * allTopics.length)];
   }
 
   async handleYearSelection(message: ParsedMessage): Promise<void> {
@@ -571,6 +607,7 @@ export class PracticeModeHandler {
   private async sendTopicPrompt(phone: string, topics: string[], lang: Language): Promise<void> {
     const rows: WhatsAppListRow[] = [
       { id: TOPIC_ALL, title: this.i18n.t('practice.allTopics', lang) },
+      { id: TOPIC_SURPRISE_ME, title: this.i18n.t('practice.surpriseMe', lang) },
       ...topics.map((topic) => ({ id: topic, title: topic })),
     ];
     const pages = chunk(rows, MAX_LIST_ROWS_PER_MESSAGE);
