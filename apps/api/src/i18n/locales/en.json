@@ -105,7 +105,7 @@
   },
   "help": {
     "title": "Available commands:",
-    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/mock - Start a timed mock exam\n/skip - Skip the current mock exam question\n/submit - Submit your mock exam early\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
   },
   "common": {
     "mainMenu": "Main Menu",

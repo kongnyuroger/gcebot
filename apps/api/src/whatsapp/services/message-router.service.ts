@@ -10,6 +10,7 @@ import { OnboardingHandler } from '../../handlers/onboarding.handler';
 import { MainMenuHandler } from '../../handlers/main-menu.handler';
 import { QaModeHandler } from '../../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../../handlers/practice-mode.handler';
+import { MockExamHandler } from '../../handlers/mock-exam.handler';
 
 export enum MessageIntent {
   COMMAND = 'COMMAND',
@@ -31,6 +32,7 @@ export class MessageRouterService {
     private readonly mainMenuHandler: MainMenuHandler,
     private readonly qaModeHandler: QaModeHandler,
     private readonly practiceModeHandler: PracticeModeHandler,
+    private readonly mockExamHandler: MockExamHandler,
   ) {}
 
   async route(message: ParsedMessage): Promise<void> {
@@ -67,6 +69,9 @@ export class MessageRouterService {
     if (session?.state === ConversationState.ANSWER_EVALUATION) {
       return this.practiceModeHandler.handleAnswer(message);
     }
+    if (session?.state === ConversationState.MOCK_EXAM_ACTIVE) {
+      return this.mockExamHandler.handleAnswer(message);
+    }
 
     return this.freeTextHandler.handle(message);
   }
@@ -95,6 +100,8 @@ export class MessageRouterService {
         return this.practiceModeHandler.handleTypeSelection(message);
       case ConversationState.ANSWER_EVALUATION:
         return this.practiceModeHandler.handlePostAnswerSelection(message);
+      case ConversationState.MOCK_EXAM_SETUP:
+        return this.mockExamHandler.handleSetupSelection(message);
       default:
         return this.menuHandler.handle(message);
     }

@@ -9,6 +9,7 @@ import { I18nService } from '../../i18n/i18n.service';
 import { OnboardingHandler } from '../../handlers/onboarding.handler';
 import { QaModeHandler } from '../../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../../handlers/practice-mode.handler';
+import { MockExamHandler } from '../../handlers/mock-exam.handler';
 
 @Injectable()
 export class CommandHandler {
@@ -22,6 +23,7 @@ export class CommandHandler {
     private readonly onboardingHandler: OnboardingHandler,
     private readonly qaModeHandler: QaModeHandler,
     private readonly practiceModeHandler: PracticeModeHandler,
+    private readonly mockExamHandler: MockExamHandler,
   ) {}
 
   async handle(message: ParsedMessage, commandName: string): Promise<void> {
@@ -46,6 +48,12 @@ export class CommandHandler {
         return this.qaModeHandler.handleHint(message);
       case 'practice':
         return this.practiceModeHandler.enterPracticeMode(phone);
+      case 'mock':
+        return this.mockExamHandler.enterMockExam(phone);
+      case 'skip':
+        return this.mockExamHandler.handleSkip(phone);
+      case 'submit':
+        return this.mockExamHandler.submitExam(phone);
       default:
         this.logger.warn(`Unknown command "/${commandName}" from ${phone}`);
         return this.handleUnknownCommand(phone, lang);
