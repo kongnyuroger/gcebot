@@ -105,7 +105,17 @@
   },
   "help": {
     "title": "Available commands:",
-    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/mock - Start a timed mock exam\n/skip - Skip the current mock exam question\n/submit - Submit your mock exam early\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/mock - Start a timed mock exam\n/skip - Skip the current mock exam question\n/submit - Submit your mock exam early\n/progress - View your progress\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+  },
+  "progress": {
+    "title": "📚 *Your Progress*",
+    "overallLine": "Overall: {{percent}}% accuracy across {{count}} questions",
+    "streakLine": "Current streak: {{days}} days 🔥",
+    "topicLineGood": "  ✅ {{topic}}: {{correct}}/{{total}} ({{percent}}%)",
+    "topicLineWeak": "  ⚠️ {{topic}}: {{correct}}/{{total}} ({{percent}}%) - needs work",
+    "focusAreasHeader": "📌 Focus on these to improve:",
+    "focusAreaLine": "{{index}}. {{subject}} - {{topic}} ({{percent}}%)",
+    "noActivity": "You haven't answered any questions yet! Try /ask, /practice, or /mock to get started."
   },
   "common": {
     "mainMenu": "Main Menu",

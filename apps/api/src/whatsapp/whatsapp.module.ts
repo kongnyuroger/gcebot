@@ -23,6 +23,7 @@ import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../handlers/practice-mode.handler';
 import { MockExamHandler } from '../handlers/mock-exam.handler';
+import { ProgressHandler } from '../handlers/progress.handler';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { MockExamHandler } from '../handlers/mock-exam.handler';
     PracticeModeHandler,
     MockExamHandler,
     MockExamTimerProcessor,
+    ProgressHandler,
   ],
   exports: [WhatsappSendService],
 })
