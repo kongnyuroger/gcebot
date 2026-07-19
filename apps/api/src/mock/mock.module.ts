@@ -1,13 +1,18 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { PracticeModule } from '../practice/practice.module';
+import { SessionModule } from '../session/session.module';
+import { RagModule } from '../rag/rag.module';
 import { MockPaperService } from './mock-paper.service';
 import { MockTimerService } from './mock-timer.service';
+import { MockGradingService } from './mock-grading.service';
 import { MOCK_EXAM_TIMER_QUEUE_NAME } from './queues/mock-exam-timer.queue';
 
 @Module({
   imports: [
     PracticeModule,
+    SessionModule,
+    RagModule, // for LlmService, used by MockGradingService's essay grading
     // Registered here (for MockTimerService's producer side) AND again in
     // WhatsappModule (for MockExamTimerProcessor's consumer side, which needs
     // WhatsappSendService and can't live here without a circular import back
@@ -16,7 +21,7 @@ import { MOCK_EXAM_TIMER_QUEUE_NAME } from './queues/mock-exam-timer.queue';
     // Bull connection (configured once via forRootAsync in RagModule).
     BullModule.registerQueue({ name: MOCK_EXAM_TIMER_QUEUE_NAME }),
   ],
-  providers: [MockPaperService, MockTimerService],
-  exports: [MockPaperService, MockTimerService],
+  providers: [MockPaperService, MockTimerService, MockGradingService],
+  exports: [MockPaperService, MockTimerService, MockGradingService],
 })
 export class MockModule {}

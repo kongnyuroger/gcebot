@@ -9,6 +9,8 @@ import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { MockPaperService } from '../mock/mock-paper.service';
 import { MockTimerService } from '../mock/mock-timer.service';
+import { MockGradingService } from '../mock/mock-grading.service';
+import { QUESTION_PREFIX_PATTERN } from '../practice/mcq-grading.util';
 import { MainMenuHandler } from './main-menu.handler';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -17,14 +19,6 @@ export const MOCK_START_EXAM = 'mock_start_exam';
 export const MOCK_CANCEL_EXAM = 'mock_cancel_exam';
 
 const PREMIUM_TIERS: SubscriptionTier[] = [SubscriptionTier.PREMIUM, SubscriptionTier.FAMILY];
-
-// Strips the leading "Question N." / "Paper N." boundary markers off a raw
-// chunk before display, since delivery already renders its own "Question X of
-// Y" header - keeping it in the body would be redundant. Same pattern as
-// PracticeModeHandler's identically-named constant (small enough, and
-// specific enough to each caller's exact header format, that duplicating it
-// beats a premature shared-util extraction for just these two call sites).
-const QUESTION_PREFIX_PATTERN = /^\s*(?:question\s*\d+|\d+[.)])\s*\.?\s*(?:paper\s*\d+\.?\s*)?/i;
 
 @Injectable()
 export class MockExamHandler {
@@ -38,6 +32,7 @@ export class MockExamHandler {
     private readonly i18n: I18nService,
     private readonly mockPaperService: MockPaperService,
     private readonly mockTimerService: MockTimerService,
+    private readonly mockGradingService: MockGradingService,
     // MainMenuHandler already depends on MockExamHandler (to enter
     // MOCK_EXAM_SETUP from the main menu tap) - forwardRef breaks the
     // resulting circular DI edge, same pattern as QA/Practice mode.
@@ -219,7 +214,24 @@ export class MockExamHandler {
 
     await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_REPORT);
 
-    // Real grading + report generation land in later steps of this branch.
+    if (session.examId) {
+      try {
+        await this.mockGradingService.gradeExam(phone, session.examId);
+      } catch (error) {
+        // Grading failure shouldn't strand the student mid-flow - they still
+        // get a submission confirmation; report generation (a later step)
+        // will need to handle a MockExam row with no score gracefully.
+        this.logger.error(
+          `submitExam: grading failed for ${phone} (examId=${session.examId}): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    } else {
+      this.logger.warn(`submitExam: no examId in session for ${phone}; skipping grading`);
+    }
+
+    // Real report generation lands in a later step of this branch.
     await this.whatsappSendService.sendText(phone, this.i18n.t('mock.submittedStub', lang));
   }
 

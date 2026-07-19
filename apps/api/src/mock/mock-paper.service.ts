@@ -3,12 +3,19 @@ import { DocType, Level } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService, PastQuestion } from '../practice/past-question.service';
 
+// A PastQuestion annotated with its computed mark allocation - preserved
+// per-question (not just summed into totalMarks) so MockGradingService can
+// score each answer individually once the exam is submitted.
+export interface MockPaperQuestion extends PastQuestion {
+  marks: number;
+}
+
 export interface MockPaper {
   // Not in the task's literal interface, but callers need it to create the
   // session record and later grade/report against the right MockExam row -
   // there's no way around returning it alongside the rest.
   examId: string;
-  questions: PastQuestion[];
+  questions: MockPaperQuestion[];
   totalMarks: number;
   durationMinutes: number;
   paperType: string;
@@ -69,13 +76,17 @@ export class MockPaperService {
     }
 
     const { label: paperType, durationMinutes } = this.determinePaperType(questions);
-    const totalMarks = questions.reduce((sum, question) => sum + this.extractMarks(question), 0);
+    const markedQuestions: MockPaperQuestion[] = questions.map((question) => ({
+      ...question,
+      marks: this.extractMarks(question),
+    }));
+    const totalMarks = markedQuestions.reduce((sum, question) => sum + question.marks, 0);
 
     const exam = await this.prisma.mockExam.create({
       data: { userId: phone, subject, level, startedAt: new Date() },
     });
 
-    return { examId: exam.id, questions, totalMarks, durationMinutes, paperType };
+    return { examId: exam.id, questions: markedQuestions, totalMarks, durationMinutes, paperType };
   }
 
   // Called when a student cancels at the Ready?/Start/Cancel prompt, so an

@@ -49,6 +49,9 @@ export interface MockExamQuestion {
   type: string;
   markingSchemeChunkId?: string;
   topic?: string;
+  // Computed at paper-assembly time (MockPaperService) - needed at grading
+  // time to know how much each individual question contributes to the total.
+  marks: number;
 }
 
 // Mock exam state, populated progressively as MOCK_EXAM_SETUP -> ACTIVE
