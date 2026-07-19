@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -17,6 +18,7 @@ import { RagModule } from './rag/rag.module';
       envFilePath: join(__dirname, '../../../.env'),
       validate: validateEnv,
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     WhatsappModule,
     SessionModule,

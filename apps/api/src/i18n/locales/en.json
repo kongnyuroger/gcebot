@@ -115,7 +115,11 @@
     "topicLineWeak": "  ⚠️ {{topic}}: {{correct}}/{{total}} ({{percent}}%) - needs work",
     "focusAreasHeader": "📌 Focus on these to improve:",
     "focusAreaLine": "{{index}}. {{subject}} - {{topic}} ({{percent}}%)",
-    "noActivity": "You haven't answered any questions yet! Try /ask, /practice, or /mock to get started."
+    "noActivity": "You haven't answered any questions yet! Try /ask, /practice, or /mock to get started.",
+    "weeklyReport": "📅 *Your Weekly Report*\n\nThis week: {{questions}} questions\nBest subject: {{bestSubject}}\nFocus area: {{focusArea}}\nStreak: {{streak}} days 🔥\n\n💡 {{tip}}",
+    "weeklyNoData": "No activity this week",
+    "weeklyTipNoActivity": "We haven't seen you this week - come back and answer a few questions to keep your streak alive!",
+    "weeklyTipFallback": "Keep practicing past questions regularly - consistency matters more than cramming."
   },
   "common": {
     "mainMenu": "Main Menu",

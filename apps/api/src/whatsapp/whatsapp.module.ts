@@ -25,6 +25,7 @@ import { QaModeHandler } from '../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../handlers/practice-mode.handler';
 import { MockExamHandler } from '../handlers/mock-exam.handler';
 import { ProgressHandler } from '../handlers/progress.handler';
+import { WeeklyReportService } from '../progress/weekly-report.service';
 
 @Module({
   imports: [
@@ -58,6 +59,12 @@ import { ProgressHandler } from '../handlers/progress.handler';
     MockExamHandler,
     MockExamTimerProcessor,
     ProgressHandler,
+    // Registered here rather than in ProgressModule - it needs
+    // WhatsappSendService, only available in this module (same reasoning as
+    // MockExamTimerProcessor above; importing WhatsappModule into
+    // ProgressModule would be circular, since WhatsappModule already imports
+    // ProgressModule for StreakService).
+    WeeklyReportService,
   ],
   exports: [WhatsappSendService],
 })
