@@ -39,6 +39,10 @@ model User {
   referredBy     String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
+  // Denormalized running per-topic score: { [subject]: { [topic]: { correct, total } } }.
+  // A fast counter for TopicScoreService - Interaction rows remain the durable
+  // event log (used by TopicWeaknessService's weighted-random topic picker).
+  topicScores    Json?
 
   subscription       Subscription?
   interactions       Interaction[]

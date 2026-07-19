@@ -69,7 +69,13 @@
     "mcqCorrect": "✅ Correct ! {{explanation}}",
     "mcqWrong": "❌ Pas tout à fait. La bonne réponse est {{correctLetter}}. {{explanation}}",
     "mcqGradingUnavailable": "Je n'ai pas pu corriger automatiquement cette question, mais votre réponse a été enregistrée.",
-    "essayGradingUnavailable": "Je n'ai pas trouvé de barème pour cette question, mais votre réponse a été enregistrée."
+    "essayGradingUnavailable": "Je n'ai pas trouvé de barème pour cette question, mais votre réponse a été enregistrée.",
+    "postAnswerPrompt": "Que souhaitez-vous faire ensuite ?",
+    "postAnswerListButton": "Choisir une option",
+    "postAnswerSectionTitle": "Prochaines étapes",
+    "nextQuestion": "Question suivante",
+    "retryTopic": "Réessayer ce sujet",
+    "changeSubject": "Changer de matière"
   },
   "help": {
     "title": "Commandes disponibles :",

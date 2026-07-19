@@ -22,12 +22,14 @@ export interface PastQuestion {
   questionNumber?: string;
   type: QuestionType;
   markingSchemeChunkId?: string;
+  topic?: string;
 }
 
 interface CandidateChunk {
   id: string;
   content: string;
   year: number | null;
+  topic: string | null;
 }
 
 // Matches a chunk that starts a new question: either "Question 3" or a bare
@@ -57,7 +59,7 @@ export class PastQuestionService {
         id: excludeIds.length > 0 ? { notIn: excludeIds } : undefined,
         document: { docType: DocType.PAST_PAPER },
       },
-      select: { id: true, content: true, year: true },
+      select: { id: true, content: true, year: true, topic: true },
     });
 
     const questions = candidates
@@ -85,6 +87,7 @@ export class PastQuestionService {
       questionNumber: selected.questionNumber,
       type: selected.type,
       markingSchemeChunkId,
+      topic: selected.chunk.topic ?? undefined,
     };
   }
 

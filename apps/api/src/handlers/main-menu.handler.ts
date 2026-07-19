@@ -28,6 +28,9 @@ export class MainMenuHandler {
     // resulting circular DI edge.
     @Inject(forwardRef(() => QaModeHandler))
     private readonly qaModeHandler: QaModeHandler,
+    // PracticeModeHandler also depends on MainMenuHandler (for the "Main
+    // Menu" post-answer navigation option) - same forwardRef fix as above.
+    @Inject(forwardRef(() => PracticeModeHandler))
     private readonly practiceModeHandler: PracticeModeHandler,
   ) {}
 

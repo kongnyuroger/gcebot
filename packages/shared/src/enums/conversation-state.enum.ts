@@ -57,4 +57,8 @@ export interface SessionContext {
   // MCQ or STRUCTURED - never "any", even if practice.type filter was "Any").
   questionType?: string;
   markingSchemeChunkId?: string;
+  // The specific topic of the currently-delivered question - distinct from
+  // practice.topic, which is the user's filter selection and may be "any"
+  // (undefined). Used by the "Retry Topic" post-answer navigation option.
+  currentQuestionTopic?: string;
 }

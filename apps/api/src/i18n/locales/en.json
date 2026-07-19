@@ -69,7 +69,13 @@
     "mcqCorrect": "✅ Correct! {{explanation}}",
     "mcqWrong": "❌ Not quite. The correct answer is {{correctLetter}}. {{explanation}}",
     "mcqGradingUnavailable": "I couldn't automatically grade this question, but I've recorded your answer.",
-    "essayGradingUnavailable": "I couldn't find a marking scheme for this question, but I've recorded your answer."
+    "essayGradingUnavailable": "I couldn't find a marking scheme for this question, but I've recorded your answer.",
+    "postAnswerPrompt": "What would you like to do next?",
+    "postAnswerListButton": "Choose an option",
+    "postAnswerSectionTitle": "Next steps",
+    "nextQuestion": "Next Question",
+    "retryTopic": "Retry Topic",
+    "changeSubject": "Change Subject"
   },
   "help": {
     "title": "Available commands:",

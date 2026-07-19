@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConversationState, SessionContext } from '@gcebot/shared';
 import { DocType, InteractionType, Language, Level } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
@@ -10,14 +10,20 @@ import { I18nService } from '../i18n/i18n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService, PastQuestion, QuestionType } from '../practice/past-question.service';
 import { TopicWeaknessService } from '../practice/topic-weakness.service';
+import { TopicScoreService } from '../practice/topic-score.service';
 import { LlmService } from '../rag/services/llm.service';
 import { ResponseFormatterService } from '../rag/services/response-formatter.service';
+import { MainMenuHandler } from './main-menu.handler';
 import { chunk, MAX_LIST_ROWS_PER_MESSAGE } from './subjects.constants';
 
 const MAX_SUBJECT_BUTTONS = 3;
 
 export const TOPIC_ALL = 'ALL_TOPICS';
 export const TOPIC_SURPRISE_ME = 'SURPRISE_ME';
+export const POST_ANSWER_NEXT = 'practice_next_question';
+export const POST_ANSWER_RETRY_TOPIC = 'practice_retry_topic';
+export const POST_ANSWER_CHANGE_SUBJECT = 'practice_change_subject';
+export const POST_ANSWER_MAIN_MENU = 'practice_main_menu';
 export const YEAR_RANGE_2020_2025 = '2020-2025';
 export const YEAR_RANGE_2015_2020 = '2015-2020';
 export const YEAR_RANGE_2010_2015 = '2010-2015';
@@ -107,6 +113,13 @@ export class PracticeModeHandler {
     private readonly llmService: LlmService,
     private readonly responseFormatter: ResponseFormatterService,
     private readonly topicWeaknessService: TopicWeaknessService,
+    private readonly topicScoreService: TopicScoreService,
+    // MainMenuHandler already depends on PracticeModeHandler (to enter
+    // PRACTICE_FILTER from the main menu tap) - forwardRef breaks the
+    // resulting circular DI edge, since this handler also needs
+    // MainMenuHandler.sendMenu() for the "Main Menu" post-answer option.
+    @Inject(forwardRef(() => MainMenuHandler))
+    private readonly mainMenuHandler: MainMenuHandler,
   ) {}
 
   // Reachable both from a MAIN_MENU button tap and the global /practice
@@ -121,6 +134,7 @@ export class PracticeModeHandler {
       practice: { seenIds: [] },
       currentQuestionId: undefined,
       currentQuestionText: undefined,
+      currentQuestionTopic: undefined,
       questionType: undefined,
       markingSchemeChunkId: undefined,
     });
@@ -319,6 +333,7 @@ export class PracticeModeHandler {
       question.markingSchemeChunkId,
     );
     await this.sessionService.updateSessionField(phone, 'questionType', question.type);
+    await this.sessionService.updateSessionField(phone, 'currentQuestionTopic', question.topic);
     await this.sessionService.updateSessionField(phone, 'practice', {
       ...practice,
       seenIds: [...(practice.seenIds ?? []), question.chunkId],
@@ -351,6 +366,85 @@ export class PracticeModeHandler {
     }
 
     return this.handleEssayAnswer(phone, answerText, session, lang);
+  }
+
+  // Button/list reply while ANSWER_EVALUATION, after grading feedback has
+  // already been sent - the post-answer navigation choice.
+  async handlePostAnswerSelection(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+
+    switch (message.listId) {
+      case POST_ANSWER_NEXT:
+        return this.handleNextQuestion(phone);
+
+      case POST_ANSWER_RETRY_TOPIC:
+        return this.handleRetryTopic(phone);
+
+      case POST_ANSWER_CHANGE_SUBJECT:
+        // enterPracticeMode already resets the whole session into
+        // PRACTICE_FILTER (it's the same escape-hatch every mode entry uses),
+        // so it doubles as "start over with a different subject" here.
+        return this.enterPracticeMode(phone);
+
+      case POST_ANSWER_MAIN_MENU:
+        await this.stateTransitionService.transition(phone, ConversationState.MAIN_MENU);
+        await this.clearPracticeContext(phone);
+        return this.mainMenuHandler.sendMenu(phone);
+
+      default:
+        this.logger.warn(`Unrecognized post-answer selection "${message.listId}" from ${phone}`);
+        return this.sendPostAnswerNav(phone, lang);
+    }
+  }
+
+  private async handleNextQuestion(phone: string): Promise<void> {
+    // deliverQuestion always transitions QUESTION_DELIVERY -> ANSWER_EVALUATION
+    // at the end, so it must be re-entered via QUESTION_DELIVERY here rather
+    // than called directly from the current ANSWER_EVALUATION state (which
+    // has no self-loop edge in the graph).
+    await this.stateTransitionService.transition(phone, ConversationState.QUESTION_DELIVERY);
+    await this.deliverQuestion(phone);
+  }
+
+  private async handleRetryTopic(phone: string): Promise<void> {
+    const session = await this.sessionService.getSession(phone);
+    if (session?.currentQuestionTopic) {
+      await this.sessionService.updateSessionField(phone, 'practice', {
+        ...session.practice,
+        topic: session.currentQuestionTopic,
+      });
+    }
+    await this.handleNextQuestion(phone);
+  }
+
+  private async clearPracticeContext(phone: string): Promise<void> {
+    await this.sessionService.updateSessionField(phone, 'practice', undefined);
+    await this.sessionService.updateSessionField(phone, 'currentQuestionId', undefined);
+    await this.sessionService.updateSessionField(phone, 'currentQuestionText', undefined);
+    await this.sessionService.updateSessionField(phone, 'currentQuestionTopic', undefined);
+    await this.sessionService.updateSessionField(phone, 'questionType', undefined);
+    await this.sessionService.updateSessionField(phone, 'markingSchemeChunkId', undefined);
+  }
+
+  private async sendPostAnswerNav(phone: string, lang: Language): Promise<void> {
+    await this.whatsappSendService.sendList(
+      phone,
+      this.i18n.t('practice.postAnswerPrompt', lang),
+      this.i18n.t('practice.postAnswerListButton', lang),
+      [
+        {
+          title: this.i18n.t('practice.postAnswerSectionTitle', lang),
+          rows: [
+            { id: POST_ANSWER_NEXT, title: this.i18n.t('practice.nextQuestion', lang) },
+            { id: POST_ANSWER_RETRY_TOPIC, title: this.i18n.t('practice.retryTopic', lang) },
+            { id: POST_ANSWER_CHANGE_SUBJECT, title: this.i18n.t('practice.changeSubject', lang) },
+            { id: POST_ANSWER_MAIN_MENU, title: this.i18n.t('common.mainMenu', lang) },
+          ],
+        },
+      ],
+    );
   }
 
   private async handleEssayAnswer(
@@ -386,6 +480,7 @@ export class PracticeModeHandler {
           correct: null,
         },
       });
+      await this.sendPostAnswerNav(phone, lang);
       return;
     }
 
@@ -399,6 +494,8 @@ export class PracticeModeHandler {
       await this.whatsappSendService.sendText(phone, part);
     }
 
+    const estimatedCorrect = this.extractEstimatedCorrectness(feedback);
+
     await this.prisma.interaction.create({
       data: {
         userId: phone,
@@ -407,9 +504,15 @@ export class PracticeModeHandler {
         topic,
         questionText,
         userAnswer: answerText,
-        correct: this.extractEstimatedCorrectness(feedback),
+        correct: estimatedCorrect,
       },
     });
+
+    if (estimatedCorrect !== null) {
+      await this.topicScoreService.recordResult(phone, subject, topic, estimatedCorrect);
+    }
+
+    await this.sendPostAnswerNav(phone, lang);
   }
 
   private extractEstimatedCorrectness(feedback: string): boolean | null {
@@ -464,6 +567,7 @@ export class PracticeModeHandler {
           correct: null,
         },
       });
+      await this.sendPostAnswerNav(phone, lang);
       return;
     }
 
@@ -502,6 +606,9 @@ export class PracticeModeHandler {
         correct: isCorrect,
       },
     });
+    await this.topicScoreService.recordResult(phone, subject, topic, isCorrect);
+
+    await this.sendPostAnswerNav(phone, lang);
   }
 
   private parseOptions(questionText: string): Record<string, string> {
