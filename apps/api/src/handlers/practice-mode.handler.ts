@@ -11,6 +11,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService, PastQuestion, QuestionType } from '../practice/past-question.service';
 import { TopicWeaknessService } from '../practice/topic-weakness.service';
 import { TopicScoreService } from '../practice/topic-score.service';
+import {
+  QUESTION_PREFIX_PATTERN,
+  parseOptions,
+  normalizeStudentAnswer,
+  extractCorrectAnswerLetter,
+  extractSchemeExplanation,
+} from '../practice/mcq-grading.util';
 import { LlmService } from '../rag/services/llm.service';
 import { ResponseFormatterService } from '../rag/services/response-formatter.service';
 import { MainMenuHandler } from './main-menu.handler';
@@ -38,26 +45,6 @@ export const TYPE_MCQ = 'MCQ';
 export const TYPE_STRUCTURED = 'STRUCTURED';
 export const TYPE_ANY = 'ANY_TYPE';
 const VALID_TYPES = [TYPE_MCQ, TYPE_STRUCTURED, TYPE_ANY];
-
-// Strips the leading "Question N." / "Paper N." boundary markers off a raw
-// chunk before display, since delivery already renders that as its own
-// "Question [N]" header - keeping it in the body would be redundant.
-const QUESTION_PREFIX_PATTERN = /^\s*(?:question\s*\d+|\d+[.)])\s*\.?\s*(?:paper\s*\d+\.?\s*)?/i;
-
-// Matches option lines like "A. x=5" or "B) 10" at the start of a line.
-const OPTION_LINE_PATTERN = /(?:^|\n)\s*([A-D])[.)]\s*([^\n]+)/g;
-
-// A bare letter answer, optionally wrapped in punctuation: "A", "a)", "(A)", "A.".
-const BARE_LETTER_PATTERN = /^\(?([A-D])\)?\.?$/i;
-
-// Best-effort extraction of the correct letter from marking scheme text -
-// real scheme phrasing is unknown until content is actually ingested, so this
-// covers the common phrasings ("Correct answer: A", "Answer: B", "Ans: C").
-const CORRECT_ANSWER_PATTERNS = [
-  /correct\s+answer\s*(?:is|:)?\s*\(?([A-D])\)?/i,
-  /\banswer\s*(?:is|:)?\s*\(?([A-D])\)?/i,
-  /\bans\s*(?:is|:)?\s*\(?([A-D])\)?/i,
-];
 
 function buildWrongAnswerPrompt(
   subject: string,
@@ -537,13 +524,13 @@ export class PracticeModeHandler {
     lang: Language,
   ): Promise<void> {
     const questionText = session.currentQuestionText!;
-    const options = this.parseOptions(questionText);
-    const studentLetter = this.normalizeStudentAnswer(answerText, options);
+    const options = parseOptions(questionText);
+    const studentLetter = normalizeStudentAnswer(answerText, options);
 
     const schemeChunk = session.markingSchemeChunkId
       ? await this.prisma.embeddingChunk.findUnique({ where: { id: session.markingSchemeChunkId } })
       : null;
-    const correctLetter = schemeChunk ? this.extractCorrectAnswerLetter(schemeChunk.content) : null;
+    const correctLetter = schemeChunk ? extractCorrectAnswerLetter(schemeChunk.content) : null;
 
     const subject = session.practice?.subject ?? 'Unknown';
     const topic = session.practice?.topic ?? 'General';
@@ -572,7 +559,7 @@ export class PracticeModeHandler {
     }
 
     const isCorrect = studentLetter !== null && studentLetter === correctLetter;
-    const schemeExplanation = this.extractSchemeExplanation(schemeChunk!.content);
+    const schemeExplanation = extractSchemeExplanation(schemeChunk!.content);
 
     const feedback = isCorrect
       ? this.i18n.t('practice.mcqCorrect', lang, { explanation: schemeExplanation })
@@ -609,53 +596,6 @@ export class PracticeModeHandler {
     await this.topicScoreService.recordResult(phone, subject, topic, isCorrect);
 
     await this.sendPostAnswerNav(phone, lang);
-  }
-
-  private parseOptions(questionText: string): Record<string, string> {
-    const options: Record<string, string> = {};
-    for (const match of questionText.matchAll(OPTION_LINE_PATTERN)) {
-      options[match[1].toUpperCase()] = match[2].trim();
-    }
-    return options;
-  }
-
-  private normalizeStudentAnswer(
-    rawAnswer: string,
-    options: Record<string, string>,
-  ): string | null {
-    const bareLetterMatch = rawAnswer.match(BARE_LETTER_PATTERN);
-    if (bareLetterMatch) {
-      return bareLetterMatch[1].toUpperCase();
-    }
-
-    const lowerAnswer = rawAnswer.toLowerCase();
-    for (const [letter, text] of Object.entries(options)) {
-      const lowerText = text.toLowerCase();
-      if (
-        lowerText === lowerAnswer ||
-        lowerText.includes(lowerAnswer) ||
-        lowerAnswer.includes(lowerText)
-      ) {
-        return letter;
-      }
-    }
-
-    return null;
-  }
-
-  private extractCorrectAnswerLetter(schemeContent: string): string | null {
-    for (const pattern of CORRECT_ANSWER_PATTERNS) {
-      const match = schemeContent.match(pattern);
-      if (match) {
-        return match[1].toUpperCase();
-      }
-    }
-    return null;
-  }
-
-  private extractSchemeExplanation(schemeContent: string): string {
-    const stripped = schemeContent.replace(QUESTION_PREFIX_PATTERN, '').trim();
-    return stripped.length > 0 ? stripped : 'See the marking scheme for details.';
   }
 
   private formatQuestion(question: PastQuestion, subject: string): string {

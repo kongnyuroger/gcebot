@@ -37,6 +37,40 @@ export interface PracticeFilterState {
   seenIds?: string[];
 }
 
+// A question as delivered within a mock exam paper - structurally the same
+// shape as the API's own PastQuestion (deliberately not imported from there:
+// this shared package must stay app-agnostic).
+export interface MockExamQuestion {
+  chunkId: string;
+  questionText: string;
+  year?: number;
+  paper?: string;
+  questionNumber?: string;
+  type: string;
+  markingSchemeChunkId?: string;
+  topic?: string;
+  // Computed at paper-assembly time (MockPaperService) - needed at grading
+  // time to know how much each individual question contributes to the total.
+  marks: number;
+}
+
+// Mock exam state, populated progressively as MOCK_EXAM_SETUP -> ACTIVE
+// -> REPORT proceeds: `subject` is set as soon as it's chosen (setup);
+// `paperType`/`durationMinutes`/`questions` once the paper is assembled
+// (setup, right before the Start/Cancel confirmation); `currentIndex`/
+// `answers` during sequential delivery (active); `endTime`/`timerJobIds`
+// once the timer actually starts (active, on "Start Exam").
+export interface MockExamSessionState {
+  subject?: string;
+  paperType?: string;
+  durationMinutes?: number;
+  questions?: MockExamQuestion[];
+  currentIndex?: number;
+  answers?: (string | null)[];
+  endTime?: number;
+  timerJobIds?: string[];
+}
+
 export interface SessionContext {
   state: ConversationState;
   subject?: string;
@@ -61,4 +95,5 @@ export interface SessionContext {
   // practice.topic, which is the user's filter selection and may be "any"
   // (undefined). Used by the "Retry Topic" post-answer navigation option.
   currentQuestionTopic?: string;
+  mockExam?: MockExamSessionState;
 }

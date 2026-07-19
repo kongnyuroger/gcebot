@@ -77,9 +77,35 @@
     "retryTopic": "Réessayer ce sujet",
     "changeSubject": "Changer de matière"
   },
+  "mock": {
+    "premiumRequired": "⏱️ Les examens blancs sont une fonctionnalité Premium. Passez à Premium pour 3000 FCFA/mois pour simuler des conditions d'examen réelles ! Envoyez /subscribe.",
+    "noSubjectsRegistered": "Vous n'avez pas encore choisi de matières. Envoyez /settings pour choisir votre niveau et vos matières d'abord.",
+    "selectSubject": "Pour quelle matière voulez-vous passer un examen blanc ?",
+    "selectSubjectListButton": "Choisir une matière",
+    "selectSubjectSectionTitle": "Vos matières",
+    "readyPrompt": "Vous êtes sur le point de commencer un examen blanc chronométré en {{subject}}. Durée : {{duration}} minutes. Impossible de faire une pause une fois commencé. Prêt ?",
+    "startExam": "Commencer l'examen",
+    "cancelExam": "Annuler",
+    "cancelled": "Pas de problème - votre examen blanc a été annulé.",
+    "noContentAvailable": "Aucune question passée n'est encore disponible pour créer un examen blanc en {{subject}}. Essayez une autre matière ou revenez plus tard.",
+    "thirtyMinWarning": "⏰ 30 minutes restantes",
+    "tenMinWarning": "⚠️ Il reste 10 minutes ! Commencez à conclure.",
+    "autoSubmit": "⏰ Temps écoulé ! Soumission automatique de votre examen...",
+    "questionDelivery": "Question {{current}} sur {{total}}\n\n{{questionText}}",
+    "submitted": "✅ Examen soumis ! Correction de vos réponses en cours...",
+    "reportHeader": "📊 *Rapport d'examen blanc - {{subject}}*\n\nScore : {{score}}/{{maxScore}} ({{percent}}%)\nRésultat : {{verdict}}\nTemps utilisé : {{minutes}} min\n\n*Répartition par thème :*\n{{topicLines}}\n\n*Point faible :* {{weakestArea}}\n\n💡 *Conseil d'étude :* {{studyTip}}",
+    "reportPass": "🎉 RÉUSSI",
+    "reportKeepPracticing": "📚 CONTINUEZ À VOUS ENTRAÎNER",
+    "reportTopicLine": "- {{topic}} : {{scored}}/{{possible}} ({{percent}}%)",
+    "reportNoTopicData": "Aucune donnée par thème disponible pour cet examen.",
+    "reportNoWeakestArea": "N/A",
+    "reportStudyTipFallback": "Continuez à vous entraîner régulièrement avec des épreuves passées - la régularité compte plus que le bachotage.",
+    "reportUngraded": "✅ Votre examen a été soumis, mais nous n'avons pas pu le corriger automatiquement cette fois. Contactez le support si cela persiste.",
+    "reportUnavailable": "Nous n'avons pas trouvé votre rapport d'examen. Contactez le support si cela persiste."
+  },
   "help": {
     "title": "Commandes disponibles :",
-    "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/ask - Poser une question\n/hint - Obtenir un indice pour votre question actuelle\n/practice - S'entraîner avec des épreuves passées\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
+    "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/ask - Poser une question\n/hint - Obtenir un indice pour votre question actuelle\n/practice - S'entraîner avec des épreuves passées\n/mock - Démarrer un examen blanc chronométré\n/skip - Passer la question actuelle de l'examen blanc\n/submit - Soumettre votre examen blanc en avance\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
   },
   "common": {
     "mainMenu": "Menu principal",

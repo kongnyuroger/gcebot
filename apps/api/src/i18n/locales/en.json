@@ -77,9 +77,35 @@
     "retryTopic": "Retry Topic",
     "changeSubject": "Change Subject"
   },
+  "mock": {
+    "premiumRequired": "⏱️ Mock exams are a Premium feature. Upgrade for 3,000 FCFA/month to simulate real exam conditions! Send /subscribe.",
+    "noSubjectsRegistered": "You haven't picked any subjects yet. Send /settings to choose your level and subjects first.",
+    "selectSubject": "Which subject would you like to sit a mock exam for?",
+    "selectSubjectListButton": "Choose a subject",
+    "selectSubjectSectionTitle": "Your subjects",
+    "readyPrompt": "You're about to start a timed {{subject}} mock exam. Duration: {{duration}} minutes. It cannot be paused once started. Ready?",
+    "startExam": "Start Exam",
+    "cancelExam": "Cancel",
+    "cancelled": "No problem - your mock exam was cancelled.",
+    "noContentAvailable": "No past questions are available yet to build a {{subject}} mock exam. Try a different subject or check back once more content is added.",
+    "thirtyMinWarning": "⏰ 30 minutes remaining",
+    "tenMinWarning": "⚠️ 10 minutes left! Start wrapping up.",
+    "autoSubmit": "⏰ Time's up! Auto-submitting your exam...",
+    "questionDelivery": "Question {{current}} of {{total}}\n\n{{questionText}}",
+    "submitted": "✅ Exam submitted! Grading your answers...",
+    "reportHeader": "📊 *Mock Exam Report - {{subject}}*\n\nScore: {{score}}/{{maxScore}} ({{percent}}%)\nResult: {{verdict}}\nTime taken: {{minutes}} min\n\n*Topic Breakdown:*\n{{topicLines}}\n\n*Weakest area:* {{weakestArea}}\n\n💡 *Study tip:* {{studyTip}}",
+    "reportPass": "🎉 PASS",
+    "reportKeepPracticing": "📚 KEEP PRACTICING",
+    "reportTopicLine": "- {{topic}}: {{scored}}/{{possible}} ({{percent}}%)",
+    "reportNoTopicData": "No topic data available for this exam.",
+    "reportNoWeakestArea": "N/A",
+    "reportStudyTipFallback": "Keep practicing past questions regularly - consistency matters more than cramming.",
+    "reportUngraded": "✅ Your exam was submitted, but we couldn't grade it automatically this time. Contact support if this persists.",
+    "reportUnavailable": "We couldn't find your exam report. Contact support if this persists."
+  },
   "help": {
     "title": "Available commands:",
-    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/mock - Start a timed mock exam\n/skip - Skip the current mock exam question\n/submit - Submit your mock exam early\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
   },
   "common": {
     "mainMenu": "Main Menu",
