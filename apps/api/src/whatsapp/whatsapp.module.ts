@@ -13,9 +13,11 @@ import { UsersModule } from '../users/users.module';
 import { I18nModule } from '../i18n/i18n.module';
 import { RagModule } from '../rag/rag.module';
 import { QuotaModule } from '../quota/quota.module';
+import { PracticeModule } from '../practice/practice.module';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
+import { PracticeModeHandler } from '../handlers/practice-mode.handler';
 
 @Module({
   imports: [
@@ -25,6 +27,7 @@ import { QaModeHandler } from '../handlers/qa-mode.handler';
     I18nModule,
     RagModule,
     QuotaModule,
+    PracticeModule,
   ],
   controllers: [WhatsappController],
   providers: [
@@ -38,6 +41,7 @@ import { QaModeHandler } from '../handlers/qa-mode.handler';
     OnboardingHandler,
     MainMenuHandler,
     QaModeHandler,
+    PracticeModeHandler,
   ],
   exports: [WhatsappSendService],
 })

@@ -9,6 +9,7 @@ import { SessionService } from '../../session/session.service';
 import { OnboardingHandler } from '../../handlers/onboarding.handler';
 import { MainMenuHandler } from '../../handlers/main-menu.handler';
 import { QaModeHandler } from '../../handlers/qa-mode.handler';
+import { PracticeModeHandler } from '../../handlers/practice-mode.handler';
 
 export enum MessageIntent {
   COMMAND = 'COMMAND',
@@ -29,6 +30,7 @@ export class MessageRouterService {
     private readonly onboardingHandler: OnboardingHandler,
     private readonly mainMenuHandler: MainMenuHandler,
     private readonly qaModeHandler: QaModeHandler,
+    private readonly practiceModeHandler: PracticeModeHandler,
   ) {}
 
   async route(message: ParsedMessage): Promise<void> {
@@ -56,11 +58,14 @@ export class MessageRouterService {
       return this.routeMenuSelection(message);
     }
 
-    // FREE_TEXT while AWAITING_QUESTION is the actual question text, not a
-    // catch-all "I didn't understand that" case.
+    // FREE_TEXT while AWAITING_QUESTION/ANSWER_EVALUATION is the actual
+    // question/answer text, not a catch-all "I didn't understand that" case.
     const session = await this.sessionService.getSession(phone);
     if (session?.state === ConversationState.AWAITING_QUESTION) {
       return this.qaModeHandler.handleQuestion(message);
+    }
+    if (session?.state === ConversationState.ANSWER_EVALUATION) {
+      return this.practiceModeHandler.handleAnswer(message);
     }
 
     return this.freeTextHandler.handle(message);
@@ -80,6 +85,16 @@ export class MessageRouterService {
         return this.qaModeHandler.handleSubjectSelection(message);
       case ConversationState.AWAITING_QUESTION:
         return this.qaModeHandler.handleFollowUpSelection(message);
+      case ConversationState.PRACTICE_FILTER:
+        return this.practiceModeHandler.handleSubjectSelection(message);
+      case ConversationState.PRACTICE_TOPIC:
+        return this.practiceModeHandler.handleTopicSelection(message);
+      case ConversationState.PRACTICE_YEAR:
+        return this.practiceModeHandler.handleYearSelection(message);
+      case ConversationState.PRACTICE_TYPE:
+        return this.practiceModeHandler.handleTypeSelection(message);
+      case ConversationState.ANSWER_EVALUATION:
+        return this.practiceModeHandler.handlePostAnswerSelection(message);
       default:
         return this.menuHandler.handle(message);
     }
