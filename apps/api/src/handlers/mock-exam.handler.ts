@@ -1,5 +1,5 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import { ConversationState } from '@gcebot/shared';
+import { ConversationState, SessionContext } from '@gcebot/shared';
 import { Language, Level, SubscriptionTier } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
 import { WhatsappSendService } from '../whatsapp/services/whatsapp-send.service';
@@ -8,6 +8,7 @@ import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { MockPaperService } from '../mock/mock-paper.service';
+import { MockTimerService } from '../mock/mock-timer.service';
 import { MainMenuHandler } from './main-menu.handler';
 
 const MAX_SUBJECT_BUTTONS = 3;
@@ -28,6 +29,7 @@ export class MockExamHandler {
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
     private readonly mockPaperService: MockPaperService,
+    private readonly mockTimerService: MockTimerService,
     // MainMenuHandler already depends on MockExamHandler (to enter
     // MOCK_EXAM_SETUP from the main menu tap) - forwardRef breaks the
     // resulting circular DI edge, same pattern as QA/Practice mode.
@@ -81,11 +83,7 @@ export class MockExamHandler {
     const session = await this.sessionService.getSession(phone);
 
     if (selectedId === MOCK_START_EXAM) {
-      // Timer + sequential delivery land in later steps of this branch - for
-      // now this just confirms the flow correctly reaches MOCK_EXAM_ACTIVE
-      // with a fully-assembled paper already sitting in session.
-      await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_ACTIVE);
-      await this.whatsappSendService.sendText(phone, this.i18n.t('mock.startingSoon', lang));
+      await this.startExam(phone, session, lang);
       return;
     }
 
@@ -120,6 +118,35 @@ export class MockExamHandler {
       return;
     }
     await this.sendSubjectPrompt(phone, user?.subjects ?? [], lang);
+  }
+
+  private async startExam(
+    phone: string,
+    session: SessionContext | null,
+    lang: Language,
+  ): Promise<void> {
+    const examId = session?.examId;
+    const durationMinutes = session?.mockExam?.durationMinutes;
+
+    if (!examId || durationMinutes === undefined) {
+      this.logger.warn(`startExam: missing examId/durationMinutes in session for ${phone}`);
+      return;
+    }
+
+    const endTime = Date.now() + durationMinutes * 60_000;
+    const timerJobIds = await this.mockTimerService.scheduleTimers(phone, examId, endTime);
+
+    await this.sessionService.updateSessionField(phone, 'mockExam', {
+      ...session?.mockExam,
+      endTime,
+      timerJobIds,
+    });
+
+    // Sequential question delivery lands in a later step of this branch - for
+    // now this confirms the flow correctly reaches MOCK_EXAM_ACTIVE with the
+    // timer actually running against a fully-assembled paper in session.
+    await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_ACTIVE);
+    await this.whatsappSendService.sendText(phone, this.i18n.t('mock.startingSoon', lang));
   }
 
   private async assembleAndPromptReady(

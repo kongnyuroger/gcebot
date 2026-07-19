@@ -88,7 +88,10 @@
     "cancelExam": "Annuler",
     "cancelled": "Pas de problème - votre examen blanc a été annulé.",
     "startingSoon": "Démarrage de votre examen... (la livraison des questions arrive dans une étape ultérieure de cette branche)",
-    "noContentAvailable": "Aucune question passée n'est encore disponible pour créer un examen blanc en {{subject}}. Essayez une autre matière ou revenez plus tard."
+    "noContentAvailable": "Aucune question passée n'est encore disponible pour créer un examen blanc en {{subject}}. Essayez une autre matière ou revenez plus tard.",
+    "thirtyMinWarning": "⏰ 30 minutes restantes",
+    "tenMinWarning": "⚠️ Il reste 10 minutes ! Commencez à conclure.",
+    "autoSubmitStub": "⏰ Temps écoulé ! Soumission automatique de votre examen... (la correction arrive dans une étape ultérieure de cette branche)"
   },
   "help": {
     "title": "Commandes disponibles :",
