@@ -77,6 +77,18 @@
     "retryTopic": "Retry Topic",
     "changeSubject": "Change Subject"
   },
+  "mock": {
+    "premiumRequired": "⏱️ Mock exams are a Premium feature. Upgrade for 3,000 FCFA/month to simulate real exam conditions! Send /subscribe.",
+    "noSubjectsRegistered": "You haven't picked any subjects yet. Send /settings to choose your level and subjects first.",
+    "selectSubject": "Which subject would you like to sit a mock exam for?",
+    "selectSubjectListButton": "Choose a subject",
+    "selectSubjectSectionTitle": "Your subjects",
+    "readyPrompt": "You're about to start a timed {{subject}} mock exam. Duration: {{duration}} minutes. It cannot be paused once started. Ready?",
+    "startExam": "Start Exam",
+    "cancelExam": "Cancel",
+    "cancelled": "No problem - your mock exam was cancelled.",
+    "startingSoon": "Starting your exam... (question delivery lands in a later step of this branch)"
+  },
   "help": {
     "title": "Available commands:",
     "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"

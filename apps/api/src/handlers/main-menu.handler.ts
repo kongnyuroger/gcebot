@@ -1,5 +1,4 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import { ConversationState } from '@gcebot/shared';
 import { Language } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
 import { WhatsappSendService } from '../whatsapp/services/whatsapp-send.service';
@@ -8,6 +7,7 @@ import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { QaModeHandler } from './qa-mode.handler';
 import { PracticeModeHandler } from './practice-mode.handler';
+import { MockExamHandler } from './mock-exam.handler';
 
 export const MENU_ROW_ASK_QUESTION = 'ask_question';
 export const MENU_ROW_PRACTICE = 'practice';
@@ -32,6 +32,10 @@ export class MainMenuHandler {
     // Menu" post-answer navigation option) - same forwardRef fix as above.
     @Inject(forwardRef(() => PracticeModeHandler))
     private readonly practiceModeHandler: PracticeModeHandler,
+    // MockExamHandler also depends on MainMenuHandler (for the "Cancel"
+    // option during MOCK_EXAM_SETUP) - same forwardRef fix as above.
+    @Inject(forwardRef(() => MockExamHandler))
+    private readonly mockExamHandler: MockExamHandler,
   ) {}
 
   // Deliberately has no session/state side effects of its own - callers decide
@@ -81,8 +85,10 @@ export class MainMenuHandler {
         return this.practiceModeHandler.enterPracticeMode(phone);
 
       case MENU_ROW_MOCK_EXAM:
-        await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_SETUP);
-        return this.sendComingSoon(phone, lang);
+        // MockExamHandler owns its own entry (premium gate first, then resets
+        // into MOCK_EXAM_SETUP) - no separate transition() call needed here,
+        // matching the QA_MODE/PRACTICE_FILTER entry pattern above.
+        return this.mockExamHandler.enterMockExam(phone);
 
       case MENU_ROW_PROGRESS:
         // No /progress command exists yet in this branch - same placeholder.

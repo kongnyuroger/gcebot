@@ -18,6 +18,7 @@ import { OnboardingHandler } from '../handlers/onboarding.handler';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../handlers/practice-mode.handler';
+import { MockExamHandler } from '../handlers/mock-exam.handler';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PracticeModeHandler } from '../handlers/practice-mode.handler';
     MainMenuHandler,
     QaModeHandler,
     PracticeModeHandler,
+    MockExamHandler,
   ],
   exports: [WhatsappSendService],
 })

@@ -77,6 +77,18 @@
     "retryTopic": "Réessayer ce sujet",
     "changeSubject": "Changer de matière"
   },
+  "mock": {
+    "premiumRequired": "⏱️ Les examens blancs sont une fonctionnalité Premium. Passez à Premium pour 3000 FCFA/mois pour simuler des conditions d'examen réelles ! Envoyez /subscribe.",
+    "noSubjectsRegistered": "Vous n'avez pas encore choisi de matières. Envoyez /settings pour choisir votre niveau et vos matières d'abord.",
+    "selectSubject": "Pour quelle matière voulez-vous passer un examen blanc ?",
+    "selectSubjectListButton": "Choisir une matière",
+    "selectSubjectSectionTitle": "Vos matières",
+    "readyPrompt": "Vous êtes sur le point de commencer un examen blanc chronométré en {{subject}}. Durée : {{duration}} minutes. Impossible de faire une pause une fois commencé. Prêt ?",
+    "startExam": "Commencer l'examen",
+    "cancelExam": "Annuler",
+    "cancelled": "Pas de problème - votre examen blanc a été annulé.",
+    "startingSoon": "Démarrage de votre examen... (la livraison des questions arrive dans une étape ultérieure de cette branche)"
+  },
   "help": {
     "title": "Commandes disponibles :",
     "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/ask - Poser une question\n/hint - Obtenir un indice pour votre question actuelle\n/practice - S'entraîner avec des épreuves passées\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
