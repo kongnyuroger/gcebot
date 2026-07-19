@@ -90,9 +90,18 @@
     "noContentAvailable": "Aucune question passée n'est encore disponible pour créer un examen blanc en {{subject}}. Essayez une autre matière ou revenez plus tard.",
     "thirtyMinWarning": "⏰ 30 minutes restantes",
     "tenMinWarning": "⚠️ Il reste 10 minutes ! Commencez à conclure.",
-    "autoSubmitStub": "⏰ Temps écoulé ! Soumission automatique de votre examen... (la correction arrive dans une étape ultérieure de cette branche)",
+    "autoSubmit": "⏰ Temps écoulé ! Soumission automatique de votre examen...",
     "questionDelivery": "Question {{current}} sur {{total}}\n\n{{questionText}}",
-    "submittedStub": "✅ Examen soumis ! Correction de vos réponses en cours... (les résultats arrivent dans une étape ultérieure de cette branche)"
+    "submitted": "✅ Examen soumis ! Correction de vos réponses en cours...",
+    "reportHeader": "📊 *Rapport d'examen blanc - {{subject}}*\n\nScore : {{score}}/{{maxScore}} ({{percent}}%)\nRésultat : {{verdict}}\nTemps utilisé : {{minutes}} min\n\n*Répartition par thème :*\n{{topicLines}}\n\n*Point faible :* {{weakestArea}}\n\n💡 *Conseil d'étude :* {{studyTip}}",
+    "reportPass": "🎉 RÉUSSI",
+    "reportKeepPracticing": "📚 CONTINUEZ À VOUS ENTRAÎNER",
+    "reportTopicLine": "- {{topic}} : {{scored}}/{{possible}} ({{percent}}%)",
+    "reportNoTopicData": "Aucune donnée par thème disponible pour cet examen.",
+    "reportNoWeakestArea": "N/A",
+    "reportStudyTipFallback": "Continuez à vous entraîner régulièrement avec des épreuves passées - la régularité compte plus que le bachotage.",
+    "reportUngraded": "✅ Votre examen a été soumis, mais nous n'avons pas pu le corriger automatiquement cette fois. Contactez le support si cela persiste.",
+    "reportUnavailable": "Nous n'avons pas trouvé votre rapport d'examen. Contactez le support si cela persiste."
   },
   "help": {
     "title": "Commandes disponibles :",

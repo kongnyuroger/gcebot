@@ -38,7 +38,7 @@ export class MockExamTimerProcessor {
   @Process(JOB_TYPE_AUTO_SUBMIT)
   async handleAutoSubmit(job: Job<MockExamTimerJobPayload>): Promise<void> {
     this.logger.log(`Auto-submit fired for exam ${job.data.examId} (phone ${job.data.phone})`);
-    await this.sendTimerMessage(job.data.phone, 'mock.autoSubmitStub');
+    await this.sendTimerMessage(job.data.phone, 'mock.autoSubmit');
     // Shares the exact same finish-up logic (cancel timers, transition state,
     // confirm submission) as a manual early /submit or the last question
     // being answered - submitExam guards against a redundant call if the

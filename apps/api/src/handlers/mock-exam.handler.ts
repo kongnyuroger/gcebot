@@ -10,6 +10,7 @@ import { I18nService } from '../i18n/i18n.service';
 import { MockPaperService } from '../mock/mock-paper.service';
 import { MockTimerService } from '../mock/mock-timer.service';
 import { MockGradingService } from '../mock/mock-grading.service';
+import { MockReportService } from '../mock/mock-report.service';
 import { QUESTION_PREFIX_PATTERN } from '../practice/mcq-grading.util';
 import { MainMenuHandler } from './main-menu.handler';
 
@@ -33,6 +34,7 @@ export class MockExamHandler {
     private readonly mockPaperService: MockPaperService,
     private readonly mockTimerService: MockTimerService,
     private readonly mockGradingService: MockGradingService,
+    private readonly mockReportService: MockReportService,
     // MainMenuHandler already depends on MockExamHandler (to enter
     // MOCK_EXAM_SETUP from the main menu tap) - forwardRef breaks the
     // resulting circular DI edge, same pattern as QA/Practice mode.
@@ -213,26 +215,34 @@ export class MockExamHandler {
     const lang = user?.language ?? Language.EN;
 
     await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_REPORT);
+    await this.whatsappSendService.sendText(phone, this.i18n.t('mock.submitted', lang));
 
     if (session.examId) {
       try {
         await this.mockGradingService.gradeExam(phone, session.examId);
       } catch (error) {
         // Grading failure shouldn't strand the student mid-flow - they still
-        // get a submission confirmation; report generation (a later step)
-        // will need to handle a MockExam row with no score gracefully.
+        // get a submission confirmation, and generateReport() below handles
+        // a MockExam row with no score gracefully (reportUngraded fallback).
         this.logger.error(
           `submitExam: grading failed for ${phone} (examId=${session.examId}): ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
       }
+
+      const reportParts = await this.mockReportService.generateReport(session.examId);
+      for (const part of reportParts) {
+        await this.whatsappSendService.sendText(phone, part);
+      }
     } else {
-      this.logger.warn(`submitExam: no examId in session for ${phone}; skipping grading`);
+      this.logger.warn(`submitExam: no examId in session for ${phone}; skipping grading/report`);
     }
 
-    // Real report generation lands in a later step of this branch.
-    await this.whatsappSendService.sendText(phone, this.i18n.t('mock.submittedStub', lang));
+    await this.stateTransitionService.transition(phone, ConversationState.MAIN_MENU);
+    await this.sessionService.updateSessionField(phone, 'mockExam', undefined);
+    await this.sessionService.updateSessionField(phone, 'examId', undefined);
+    await this.mainMenuHandler.sendMenu(phone);
   }
 
   private hasActiveExam(session: SessionContext | null): boolean {

@@ -90,9 +90,18 @@
     "noContentAvailable": "No past questions are available yet to build a {{subject}} mock exam. Try a different subject or check back once more content is added.",
     "thirtyMinWarning": "⏰ 30 minutes remaining",
     "tenMinWarning": "⚠️ 10 minutes left! Start wrapping up.",
-    "autoSubmitStub": "⏰ Time's up! Auto-submitting your exam... (grading lands in a later step of this branch)",
+    "autoSubmit": "⏰ Time's up! Auto-submitting your exam...",
     "questionDelivery": "Question {{current}} of {{total}}\n\n{{questionText}}",
-    "submittedStub": "✅ Exam submitted! Grading your answers... (results land in a later step of this branch)"
+    "submitted": "✅ Exam submitted! Grading your answers...",
+    "reportHeader": "📊 *Mock Exam Report - {{subject}}*\n\nScore: {{score}}/{{maxScore}} ({{percent}}%)\nResult: {{verdict}}\nTime taken: {{minutes}} min\n\n*Topic Breakdown:*\n{{topicLines}}\n\n*Weakest area:* {{weakestArea}}\n\n💡 *Study tip:* {{studyTip}}",
+    "reportPass": "🎉 PASS",
+    "reportKeepPracticing": "📚 KEEP PRACTICING",
+    "reportTopicLine": "- {{topic}}: {{scored}}/{{possible}} ({{percent}}%)",
+    "reportNoTopicData": "No topic data available for this exam.",
+    "reportNoWeakestArea": "N/A",
+    "reportStudyTipFallback": "Keep practicing past questions regularly - consistency matters more than cramming.",
+    "reportUngraded": "✅ Your exam was submitted, but we couldn't grade it automatically this time. Contact support if this persists.",
+    "reportUnavailable": "We couldn't find your exam report. Contact support if this persists."
   },
   "help": {
     "title": "Available commands:",
