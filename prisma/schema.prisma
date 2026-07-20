@@ -57,6 +57,11 @@ model User {
 enum PaymentMethod {
   MTN_MOMO
   ORANGE_MONEY
+  // Not a real payment - a free 7-day Premium grant from a streak milestone
+  // (see MilestoneService). Subscription.paymentMethod/paymentReference are
+  // required NOT NULL, so this needs its own tag rather than misrepresenting
+  // a comped grant as MTN_MOMO/ORANGE_MONEY.
+  MILESTONE_BONUS
 }
 
 model Subscription {

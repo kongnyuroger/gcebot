@@ -23,8 +23,7 @@
     "askQuestion": "📚 Poser une question",
     "practice": "📝 S'entraîner",
     "mockExam": "⏱️ Examen blanc",
-    "progress": "📊 Ma progression",
-    "comingSoon": "Cette fonctionnalité arrive bientôt - restez à l'écoute !"
+    "progress": "📊 Ma progression"
   },
   "settings": {
     "resetting": "Mettons à jour votre niveau et vos matières."
@@ -105,7 +104,22 @@
   },
   "help": {
     "title": "Commandes disponibles :",
-    "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/ask - Poser une question\n/hint - Obtenir un indice pour votre question actuelle\n/practice - S'entraîner avec des épreuves passées\n/mock - Démarrer un examen blanc chronométré\n/skip - Passer la question actuelle de l'examen blanc\n/submit - Soumettre votre examen blanc en avance\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
+    "commandList": "/menu - Menu principal\n/settings - Changer de niveau et de matières\n/ask - Poser une question\n/hint - Obtenir un indice pour votre question actuelle\n/practice - S'entraîner avec des épreuves passées\n/mock - Démarrer un examen blanc chronométré\n/skip - Passer la question actuelle de l'examen blanc\n/submit - Soumettre votre examen blanc en avance\n/progress - Voir votre progression\n/en - Passer en anglais\n/fr - Passer en français\n/help - Afficher ce message"
+  },
+  "progress": {
+    "title": "📚 *Votre progression*",
+    "overallLine": "Global : {{percent}}% de réussite sur {{count}} questions",
+    "streakLine": "Série actuelle : {{days}} jours 🔥",
+    "topicLineGood": "  ✅ {{topic}} : {{correct}}/{{total}} ({{percent}}%)",
+    "topicLineWeak": "  ⚠️ {{topic}} : {{correct}}/{{total}} ({{percent}}%) - à travailler",
+    "focusAreasHeader": "📌 Concentrez-vous sur ceci pour progresser :",
+    "focusAreaLine": "{{index}}. {{subject}} - {{topic}} ({{percent}}%)",
+    "noActivity": "Vous n'avez pas encore répondu à des questions ! Essayez /ask, /practice ou /mock pour commencer.",
+    "weeklyReport": "📅 *Votre rapport hebdomadaire*\n\nCette semaine : {{questions}} questions\nMeilleure matière : {{bestSubject}}\nÀ travailler : {{focusArea}}\nSérie : {{streak}} jours 🔥\n\n💡 {{tip}}",
+    "weeklyNoData": "Aucune activité cette semaine",
+    "weeklyTipNoActivity": "On ne vous a pas vu cette semaine - revenez répondre à quelques questions pour garder votre série active !",
+    "weeklyTipFallback": "Continuez à vous entraîner régulièrement avec des épreuves passées - la régularité compte plus que le bachotage.",
+    "milestoneCelebration": "🎉 Série de {{days}} jours ! Vous êtes en feu ! Voici 7 jours de Premium offerts 🎁"
   },
   "common": {
     "mainMenu": "Menu principal",

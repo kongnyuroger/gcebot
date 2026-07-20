@@ -23,8 +23,7 @@
     "askQuestion": "📚 Ask a Question",
     "practice": "📝 Practice Past Qs",
     "mockExam": "⏱️ Mock Exam",
-    "progress": "📊 My Progress",
-    "comingSoon": "This feature is coming soon - stay tuned!"
+    "progress": "📊 My Progress"
   },
   "settings": {
     "resetting": "Let's update your level and subjects."
@@ -105,7 +104,22 @@
   },
   "help": {
     "title": "Available commands:",
-    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/mock - Start a timed mock exam\n/skip - Skip the current mock exam question\n/submit - Submit your mock exam early\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+    "commandList": "/menu - Main menu\n/settings - Change level & subjects\n/ask - Ask a question\n/hint - Get a hint for your current question\n/practice - Practice past questions\n/mock - Start a timed mock exam\n/skip - Skip the current mock exam question\n/submit - Submit your mock exam early\n/progress - View your progress\n/en - Switch to English\n/fr - Switch to French\n/help - Show this message"
+  },
+  "progress": {
+    "title": "📚 *Your Progress*",
+    "overallLine": "Overall: {{percent}}% accuracy across {{count}} questions",
+    "streakLine": "Current streak: {{days}} days 🔥",
+    "topicLineGood": "  ✅ {{topic}}: {{correct}}/{{total}} ({{percent}}%)",
+    "topicLineWeak": "  ⚠️ {{topic}}: {{correct}}/{{total}} ({{percent}}%) - needs work",
+    "focusAreasHeader": "📌 Focus on these to improve:",
+    "focusAreaLine": "{{index}}. {{subject}} - {{topic}} ({{percent}}%)",
+    "noActivity": "You haven't answered any questions yet! Try /ask, /practice, or /mock to get started.",
+    "weeklyReport": "📅 *Your Weekly Report*\n\nThis week: {{questions}} questions\nBest subject: {{bestSubject}}\nFocus area: {{focusArea}}\nStreak: {{streak}} days 🔥\n\n💡 {{tip}}",
+    "weeklyNoData": "No activity this week",
+    "weeklyTipNoActivity": "We haven't seen you this week - come back and answer a few questions to keep your streak alive!",
+    "weeklyTipFallback": "Keep practicing past questions regularly - consistency matters more than cramming.",
+    "milestoneCelebration": "🎉 {{days}}-day streak! You're on fire! Here's 7 days of Premium on us 🎁"
   },
   "common": {
     "mainMenu": "Main Menu",

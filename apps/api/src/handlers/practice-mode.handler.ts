@@ -20,6 +20,8 @@ import {
 } from '../practice/mcq-grading.util';
 import { LlmService } from '../rag/services/llm.service';
 import { ResponseFormatterService } from '../rag/services/response-formatter.service';
+import { StreakService } from '../progress/streak.service';
+import { MilestoneService } from '../progress/milestone.service';
 import { MainMenuHandler } from './main-menu.handler';
 import { chunk, MAX_LIST_ROWS_PER_MESSAGE } from './subjects.constants';
 
@@ -101,6 +103,8 @@ export class PracticeModeHandler {
     private readonly responseFormatter: ResponseFormatterService,
     private readonly topicWeaknessService: TopicWeaknessService,
     private readonly topicScoreService: TopicScoreService,
+    private readonly streakService: StreakService,
+    private readonly milestoneService: MilestoneService,
     // MainMenuHandler already depends on PracticeModeHandler (to enter
     // PRACTICE_FILTER from the main menu tap) - forwardRef breaks the
     // resulting circular DI edge, since this handler also needs
@@ -347,6 +351,8 @@ export class PracticeModeHandler {
       this.logger.warn(`handleAnswer: no active question in session for ${phone}`);
       return;
     }
+
+    await this.recordActivity(phone);
 
     if (session.questionType === TYPE_MCQ) {
       return this.handleMcqAnswer(phone, answerText, session, lang);
@@ -695,5 +701,17 @@ export class PracticeModeHandler {
       { id: TYPE_STRUCTURED, title: this.i18n.t('practice.typeStructured', lang) },
       { id: TYPE_ANY, title: this.i18n.t('practice.anyType', lang) },
     ]);
+  }
+
+  // Best-effort: a streak/milestone failure shouldn't block grading feedback.
+  private async recordActivity(phone: string): Promise<void> {
+    try {
+      const updatedUser = await this.streakService.recordActivity(phone);
+      await this.milestoneService.checkMilestone(updatedUser);
+    } catch (error) {
+      this.logger.error(
+        `recordActivity failed for ${phone}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }
