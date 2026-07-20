@@ -17,6 +17,11 @@ export const envSchema = z.object({
   MOMO_API_USER: z.string().min(1),
   MOMO_API_KEY: z.string().min(1),
 
+  // Signs both the short-lived TOTP tempToken and the 4h admin session JWT -
+  // a separate secret from anything WhatsApp/payment-related, so rotating it
+  // can never affect the student-facing bot.
+  ADMIN_JWT_SECRET: z.string().min(32),
+
   SENTRY_DSN: z.string().url().optional(),
 });
 

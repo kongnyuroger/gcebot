@@ -196,3 +196,25 @@ model PendingPayment {
 
   @@map("pending_payments")
 }
+
+enum AdminRole {
+  SUPER_ADMIN
+  CONTENT_MANAGER
+  VIEWER
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  // Null until TOTP enrollment completes (set by the admin-seed script for
+  // the first SUPER_ADMIN) - AdminAuthService.login() treats a null secret
+  // as "2FA not configured" and refuses to issue even a tempToken, rather
+  // than silently allowing a password-only session.
+  totpSecret   String?
+  role         AdminRole
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+
+  @@map("admin_users")
+}

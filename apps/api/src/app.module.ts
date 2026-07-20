@@ -10,6 +10,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { SessionModule } from './session/session.module';
 import { UsersModule } from './users/users.module';
 import { RagModule } from './rag/rag.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { RagModule } from './rag/rag.module';
     SessionModule,
     UsersModule,
     RagModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
