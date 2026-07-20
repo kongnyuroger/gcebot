@@ -21,6 +21,11 @@ export const envSchema = z.object({
   // a separate secret from anything WhatsApp/payment-related, so rotating it
   // can never affect the student-facing bot.
   ADMIN_JWT_SECRET: z.string().min(32),
+  // The admin portal (apps/admin) runs on its own origin - its browser-side
+  // fetch() calls (e.g. the login page's direct call to /admin/auth/login,
+  // before any session/token exists to attach) need this API's CORS policy
+  // to explicitly allow it, or the browser blocks the response outright.
+  ADMIN_PORTAL_URL: z.string().url().default('http://localhost:3001'),
 
   SENTRY_DSN: z.string().url().optional(),
 });
