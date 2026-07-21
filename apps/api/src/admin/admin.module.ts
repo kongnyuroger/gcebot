@@ -9,6 +9,8 @@ import { AdminRoleGuard } from './auth/admin-role.guard';
 import { DocumentsController } from './controllers/documents.controller';
 import { UsersController } from './controllers/users.controller';
 import { AdminUsersService } from './services/admin-users.service';
+import { AnalyticsController } from './controllers/analytics.controller';
+import { AnalyticsService } from './services/analytics.service';
 
 @Module({
   imports: [
@@ -24,8 +26,8 @@ import { AdminUsersService } from './services/admin-users.service';
   // All admin-only controllers (documents/users/analytics/broadcast, as this
   // branch progresses) live directly here rather than in their own
   // sub-modules, matching WhatsappModule's own flat-controllers convention.
-  controllers: [AdminAuthController, DocumentsController, UsersController],
-  providers: [AdminAuthService, AdminJwtGuard, AdminRoleGuard, AdminUsersService],
+  controllers: [AdminAuthController, DocumentsController, UsersController, AnalyticsController],
+  providers: [AdminAuthService, AdminJwtGuard, AdminRoleGuard, AdminUsersService, AnalyticsService],
   exports: [AdminJwtGuard, AdminRoleGuard],
 })
 export class AdminModule {}
