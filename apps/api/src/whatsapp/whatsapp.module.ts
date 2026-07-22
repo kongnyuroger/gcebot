@@ -27,6 +27,9 @@ import { MockExamHandler } from '../handlers/mock-exam.handler';
 import { ProgressHandler } from '../handlers/progress.handler';
 import { WeeklyReportService } from '../progress/weekly-report.service';
 import { MilestoneService } from '../progress/milestone.service';
+import { AdminModule } from '../admin/admin.module';
+import { BROADCAST_QUEUE_NAME } from '../admin/queues/broadcast.queue';
+import { BroadcastProcessor } from '../admin/processors/broadcast.processor';
 
 @Module({
   imports: [
@@ -39,10 +42,16 @@ import { MilestoneService } from '../progress/milestone.service';
     PracticeModule,
     MockModule,
     ProgressModule,
+    // For BroadcastService, used by BroadcastProcessor below - a safe
+    // one-way import (AdminModule depends on nothing that imports
+    // WhatsappModule), unlike the reverse direction MockExamTimerProcessor/
+    // WeeklyReportService/MilestoneService all need instead.
+    AdminModule,
     // See mock.module.ts's comment: registered here too so
     // MockExamTimerProcessor (which needs WhatsappSendService, only
     // available in this module) can consume the same named queue.
     BullModule.registerQueue({ name: MOCK_EXAM_TIMER_QUEUE_NAME }),
+    BullModule.registerQueue({ name: BROADCAST_QUEUE_NAME }),
   ],
   controllers: [WhatsappController],
   providers: [
@@ -68,6 +77,7 @@ import { MilestoneService } from '../progress/milestone.service';
     WeeklyReportService,
     // Same WhatsappSendService reasoning as WeeklyReportService above.
     MilestoneService,
+    BroadcastProcessor,
   ],
   exports: [WhatsappSendService],
 })
