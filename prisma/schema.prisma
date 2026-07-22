@@ -196,3 +196,57 @@ model PendingPayment {
 
   @@map("pending_payments")
 }
+
+enum AdminRole {
+  SUPER_ADMIN
+  CONTENT_MANAGER
+  VIEWER
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  // Null until TOTP enrollment completes (set by the admin-seed script for
+  // the first SUPER_ADMIN) - AdminAuthService.login() treats a null secret
+  // as "2FA not configured" and refuses to issue even a tempToken, rather
+  // than silently allowing a password-only session.
+  totpSecret   String?
+  role         AdminRole
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+
+  @@map("admin_users")
+}
+
+enum BroadcastTarget {
+  ALL
+  TIER
+  SUBJECT
+  LEVEL
+}
+
+enum BroadcastStatus {
+  SCHEDULED
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+model Broadcast {
+  id              String          @id @default(cuid())
+  message         String
+  target          BroadcastTarget
+  // e.g. "PREMIUM" for TIER, "Biology" for SUBJECT, "O_LEVEL" for LEVEL - null for ALL.
+  targetValue     String?
+  scheduleAt      DateTime?
+  status          BroadcastStatus @default(SCHEDULED)
+  totalRecipients Int             @default(0)
+  sentCount       Int             @default(0)
+  failedCount     Int             @default(0)
+  createdBy       String
+  createdAt       DateTime        @default(now())
+  completedAt     DateTime?
+
+  @@map("broadcasts")
+}

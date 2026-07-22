@@ -22,6 +22,16 @@ export interface IngestDocumentMetadata {
   topic?: string;
 }
 
+export interface PaginatedDocuments {
+  documents: Document[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+const DOCUMENTS_PAGE_SIZE = 20;
+
 @Injectable()
 export class IngestionService {
   private readonly logger = new Logger(IngestionService.name);
@@ -61,6 +71,44 @@ export class IngestionService {
 
   async getIngestionStatus(documentId: string): Promise<Document> {
     return this.findDocumentOrThrow(documentId);
+  }
+
+  // Powers the admin documents table - Document already carries chunkCount
+  // and errorMessage directly, so no separate aggregation is needed here.
+  async listDocuments(
+    page = 1,
+    status?: IngestionStatus,
+    subject?: string,
+  ): Promise<PaginatedDocuments> {
+    const where = {
+      ...(status ? { ingestionStatus: status } : {}),
+      ...(subject ? { subject } : {}),
+    };
+
+    const [documents, total] = await Promise.all([
+      this.prisma.document.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * DOCUMENTS_PAGE_SIZE,
+        take: DOCUMENTS_PAGE_SIZE,
+      }),
+      this.prisma.document.count({ where }),
+    ]);
+
+    return {
+      documents,
+      page,
+      pageSize: DOCUMENTS_PAGE_SIZE,
+      total,
+      totalPages: Math.ceil(total / DOCUMENTS_PAGE_SIZE),
+    };
+  }
+
+  async deleteDocument(documentId: string): Promise<void> {
+    await this.findDocumentOrThrow(documentId);
+    // EmbeddingChunk.documentId has onDelete: Cascade, so this removes every
+    // chunk belonging to the document too - no separate cleanup needed.
+    await this.prisma.document.delete({ where: { id: documentId } });
   }
 
   async retryIngestion(documentId: string): Promise<Document> {
