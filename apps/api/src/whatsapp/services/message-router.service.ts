@@ -63,6 +63,9 @@ export class MessageRouterService {
     // FREE_TEXT while AWAITING_QUESTION/ANSWER_EVALUATION is the actual
     // question/answer text, not a catch-all "I didn't understand that" case.
     const session = await this.sessionService.getSession(phone);
+    if (session?.state === ConversationState.SUBJECT_SELECTION) {
+      return this.onboardingHandler.handleSubjectTextReply(message);
+    }
     if (session?.state === ConversationState.AWAITING_QUESTION) {
       return this.qaModeHandler.handleQuestion(message);
     }

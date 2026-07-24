@@ -7,7 +7,7 @@ import { SessionService } from '../session/session.service';
 import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
-import { chunk, MAX_LIST_ROWS_PER_MESSAGE, SUBJECTS_BY_LEVEL } from './subjects.constants';
+import { parseSubjectSelections, SUBJECTS_BY_LEVEL } from './subjects.constants';
 import { MainMenuHandler } from './main-menu.handler';
 
 const CONFIRM_SUBJECTS_BUTTON_ID = 'confirm_subjects';
@@ -60,16 +60,16 @@ export class OnboardingHandler {
     const user = await this.usersService.updateLevel(phone, buttonId);
     await this.sessionService.updateSessionField(phone, 'pendingSubjects', []);
 
-    await this.sendSubjectList(phone, buttonId, user.language);
+    await this.sendSubjectPrompt(phone, buttonId, user.language);
 
     await this.stateTransitionService.transition(phone, ConversationState.SUBJECT_SELECTION);
   }
 
+  // Handles the Confirm/Redo buttons - the free-text reply itself (where a
+  // user actually picks subjects) is routed separately, straight to
+  // handleSubjectTextReply, since MessageRouterService classifies plain text
+  // as FREE_TEXT rather than MENU_SELECTION.
   async handleSubjectSelection(message: ParsedMessage): Promise<void> {
-    if (message.type === 'list_reply') {
-      return this.handleSubjectTap(message);
-    }
-
     if (message.type === 'button_reply' && message.buttonId === REDO_SUBJECTS_BUTTON_ID) {
       return this.handleSubjectsRedo(message);
     }
@@ -83,6 +83,60 @@ export class OnboardingHandler {
     );
   }
 
+  // A user can reply with several subjects in one message (numbers and/or
+  // names, comma-separated - e.g. "1,3,5" or "Biology, Physics") since
+  // WhatsApp's interactive list/button messages only support single
+  // selection per tap. Accumulates across multiple replies too: state stays
+  // SUBJECT_SELECTION until Confirm, so a follow-up text message merges into
+  // the same pendingSubjects list rather than replacing it.
+  async handleSubjectTextReply(message: ParsedMessage): Promise<void> {
+    const phone = message.from;
+    const user = await this.usersService.getUserProfile(phone);
+    const lang = user?.language ?? Language.EN;
+    const level = user?.level ?? Level.O_LEVEL;
+
+    if (!message.text) {
+      this.logger.warn(`Subject-selection free-text reply from ${phone} had no text`);
+      await this.whatsappSendService.sendText(
+        phone,
+        this.i18n.t('onboarding.noSubjectsUnderstood', lang),
+      );
+      return;
+    }
+
+    const { matched, unmatched } = parseSubjectSelections(message.text, SUBJECTS_BY_LEVEL[level]);
+
+    if (matched.length === 0) {
+      await this.whatsappSendService.sendText(
+        phone,
+        this.i18n.t('onboarding.noSubjectsUnderstood', lang),
+      );
+      return;
+    }
+
+    const session = await this.sessionService.getSession(phone);
+    const pendingSubjects = session?.pendingSubjects ?? [];
+    for (const subjectName of matched) {
+      if (!pendingSubjects.includes(subjectName)) {
+        pendingSubjects.push(subjectName);
+      }
+    }
+    await this.sessionService.updateSessionField(phone, 'pendingSubjects', pendingSubjects);
+
+    await this.whatsappSendService.sendText(
+      phone,
+      this.i18n.t('onboarding.subjectsSoFar', lang, { subjects: pendingSubjects.join(', ') }),
+    );
+    if (unmatched.length > 0) {
+      await this.whatsappSendService.sendText(
+        phone,
+        this.i18n.t('onboarding.subjectsNotUnderstood', lang, { tokens: unmatched.join(', ') }),
+      );
+    }
+
+    await this.sendSubjectConfirmation(phone, lang);
+  }
+
   // Public: reused by CommandHandler's /settings command to re-run this same step.
   async sendLevelSelection(phone: string, lang: Language): Promise<void> {
     await this.whatsappSendService.sendButtons(phone, this.i18n.t('onboarding.selectLevel', lang), [
@@ -91,24 +145,15 @@ export class OnboardingHandler {
     ]);
   }
 
-  private async sendSubjectList(phone: string, level: Level, lang: Language): Promise<void> {
-    const subjects = SUBJECTS_BY_LEVEL[level];
-    const chunks = chunk(subjects, MAX_LIST_ROWS_PER_MESSAGE);
+  private async sendSubjectPrompt(phone: string, level: Level, lang: Language): Promise<void> {
+    const subjectList = SUBJECTS_BY_LEVEL[level]
+      .map((subject, index) => `${index + 1}. ${subject.name}`)
+      .join('\n');
 
-    for (let i = 0; i < chunks.length; i++) {
-      const partSuffix = chunks.length > 1 ? ` (${i + 1}/${chunks.length})` : '';
-      await this.whatsappSendService.sendList(
-        phone,
-        this.i18n.t('onboarding.selectSubjects', lang) + partSuffix,
-        this.i18n.t('onboarding.subjectsListTitle', lang),
-        [
-          {
-            title: this.i18n.t('onboarding.subjectsSectionTitle', lang),
-            rows: chunks[i].map((subject) => ({ id: subject.id, title: subject.name })),
-          },
-        ],
-      );
-    }
+    await this.whatsappSendService.sendText(
+      phone,
+      this.i18n.t('onboarding.selectSubjectsPrompt', lang, { subjectList }),
+    );
   }
 
   private async sendSubjectConfirmation(phone: string, lang: Language): Promise<void> {
@@ -122,34 +167,6 @@ export class OnboardingHandler {
     );
   }
 
-  private async handleSubjectTap(message: ParsedMessage): Promise<void> {
-    const phone = message.from;
-    const subjectName = message.listTitle;
-
-    if (!subjectName) {
-      this.logger.warn(`Subject list_reply from ${phone} had no listTitle`);
-      return;
-    }
-
-    const session = await this.sessionService.getSession(phone);
-    const pendingSubjects = session?.pendingSubjects ?? [];
-
-    if (!pendingSubjects.includes(subjectName)) {
-      pendingSubjects.push(subjectName);
-    }
-
-    await this.sessionService.updateSessionField(phone, 'pendingSubjects', pendingSubjects);
-
-    const user = await this.usersService.getUserProfile(phone);
-    const lang = user?.language ?? Language.EN;
-
-    await this.whatsappSendService.sendText(
-      phone,
-      this.i18n.t('onboarding.subjectsSoFar', lang, { subjects: pendingSubjects.join(', ') }),
-    );
-    await this.sendSubjectConfirmation(phone, lang);
-  }
-
   private async handleSubjectsRedo(message: ParsedMessage): Promise<void> {
     const phone = message.from;
     await this.sessionService.updateSessionField(phone, 'pendingSubjects', []);
@@ -158,7 +175,7 @@ export class OnboardingHandler {
     const lang = user?.language ?? Language.EN;
     const level = user?.level ?? Level.O_LEVEL;
 
-    await this.sendSubjectList(phone, level, lang);
+    await this.sendSubjectPrompt(phone, level, lang);
   }
 
   private async handleSubjectsConfirmed(message: ParsedMessage): Promise<void> {
@@ -171,7 +188,7 @@ export class OnboardingHandler {
 
     if (subjects.length === 0) {
       this.logger.warn(`${phone} pressed Confirm with no subjects selected`);
-      return this.sendSubjectList(phone, user?.level ?? Level.O_LEVEL, lang);
+      return this.sendSubjectPrompt(phone, user?.level ?? Level.O_LEVEL, lang);
     }
 
     await this.usersService.updateSubjects(phone, subjects);
