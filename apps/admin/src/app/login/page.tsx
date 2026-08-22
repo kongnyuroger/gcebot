@@ -65,13 +65,23 @@ export default function LoginPage() {
     try {
       const result = await signIn('credentials', { tempToken, code, redirect: false });
 
-      if (result?.error) {
-        setError('Invalid authentication code');
+      if (!result || result.error) {
+        // A thrown/malformed result (e.g. the API took too long to respond -
+        // see the NextAuth route's maxDuration) looks the same to the client
+        // as a wrong code: no result.error, just a falsy result. Treat both
+        // as a visible failure rather than silently resetting the button.
+        setError(
+          result?.error
+            ? 'Invalid authentication code'
+            : 'Verification timed out - the server may be waking up. Please try again in a moment.',
+        );
         return;
       }
 
       router.push('/admin');
       router.refresh();
+    } catch {
+      setError('Could not reach the server - please try again');
     } finally {
       setSubmitting(false);
     }
