@@ -56,11 +56,16 @@ export class WhatsappController {
       return { received: true };
     }
 
+    this.logger.log(`Inbound ${message.type} from ${message.from}`);
+
     // Ack Meta immediately; process asynchronously so a slow downstream call
     // (WhatsApp API sends, DB/Redis) can't cause a webhook timeout/retry storm.
-    this.messageRouter.route(message).catch((error: unknown) => {
-      this.logger.error(`Error routing message from ${message.from}: ${error}`);
-    });
+    this.messageRouter
+      .route(message)
+      .then(() => this.logger.log(`Handled ${message.type} from ${message.from}`))
+      .catch((error: unknown) => {
+        this.logger.error(`Error routing message from ${message.from}: ${error}`);
+      });
     return { received: true };
   }
 }
