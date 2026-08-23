@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConversationState } from '@gcebot/shared';
 import { CommandHandler } from '../handlers/command.handler';
 import { MenuHandler } from '../handlers/menu.handler';
@@ -22,6 +22,8 @@ const MENU_COMMAND = '/menu';
 
 @Injectable()
 export class MessageRouterService {
+  private readonly logger = new Logger(MessageRouterService.name);
+
   constructor(
     private readonly commandHandler: CommandHandler,
     private readonly menuHandler: MenuHandler,
@@ -39,12 +41,14 @@ export class MessageRouterService {
     const phone = message.from;
 
     if (await this.usersService.isNewUser(phone)) {
+      this.logger.log(`${phone}: new user -> onboarding`);
       return this.onboardingHandler.handleNewUser(message);
     }
 
     // Global escape hatch: works from ANY state, so it bypasses the transition
     // validator entirely (same reasoning as /settings in CommandHandler).
     if (message.type === 'text' && message.text?.trim().toLowerCase() === MENU_COMMAND) {
+      this.logger.log(`${phone}: /menu -> MAIN_MENU`);
       await this.sessionService.updateSessionField(phone, 'state', ConversationState.MAIN_MENU);
       return this.mainMenuHandler.sendMenu(phone);
     }
@@ -53,16 +57,21 @@ export class MessageRouterService {
 
     if (intent === MessageIntent.COMMAND) {
       const commandName = message.text!.slice(1).trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+      this.logger.log(`${phone}: COMMAND /${commandName}`);
       return this.commandHandler.handle(message, commandName);
     }
 
     if (intent === MessageIntent.MENU_SELECTION) {
+      const selection = message.buttonId ?? message.listId ?? '(unknown)';
+      const session = await this.sessionService.getSession(phone);
+      this.logger.log(`${phone}: MENU_SELECTION "${selection}" in state ${session?.state}`);
       return this.routeMenuSelection(message);
     }
 
     // FREE_TEXT while AWAITING_QUESTION/ANSWER_EVALUATION is the actual
     // question/answer text, not a catch-all "I didn't understand that" case.
     const session = await this.sessionService.getSession(phone);
+    this.logger.log(`${phone}: FREE_TEXT in state ${session?.state}`);
     if (session?.state === ConversationState.AWAITING_QUESTION) {
       return this.qaModeHandler.handleQuestion(message);
     }

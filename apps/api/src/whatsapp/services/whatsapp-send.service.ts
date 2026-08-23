@@ -54,6 +54,7 @@ export class WhatsappSendService {
       type: 'text',
       text: { body: text },
     });
+    this.logger.log(`Sent text to ${to}`);
   }
 
   async sendButtons(to: string, text: string, buttons: WhatsAppButton[]): Promise<void> {
@@ -78,6 +79,7 @@ export class WhatsappSendService {
         },
       },
     });
+    this.logger.log(`Sent ${buttons.length} button(s) to ${to}`);
   }
 
   async sendList(
@@ -99,6 +101,8 @@ export class WhatsappSendService {
         },
       },
     });
+    const rowCount = sections.reduce((sum, section) => sum + section.rows.length, 0);
+    this.logger.log(`Sent a list (${rowCount} row(s)) to ${to}`);
   }
 
   async markAsRead(messageId: string): Promise<void> {
