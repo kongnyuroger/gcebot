@@ -72,6 +72,9 @@ export class MessageRouterService {
     // question/answer text, not a catch-all "I didn't understand that" case.
     const session = await this.sessionService.getSession(phone);
     this.logger.log(`${phone}: FREE_TEXT in state ${session?.state}`);
+    if (session?.state === ConversationState.SUBJECT_SELECTION) {
+      return this.onboardingHandler.handleSubjectTextReply(message);
+    }
     if (session?.state === ConversationState.AWAITING_QUESTION) {
       return this.qaModeHandler.handleQuestion(message);
     }
