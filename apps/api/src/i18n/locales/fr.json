@@ -8,14 +8,9 @@
     "selectLevel": "Pour quel niveau vous préparez-vous ?",
     "levelOLevel": "O-Level",
     "levelALevel": "A-Level",
-    "selectSubjectsPrompt": "Parfait ! Répondez avec les numéros de TOUTES les matières que vous étudiez, séparés par des virgules (ex. 1,3,5) :\n\n{{subjectList}}",
-    "subjectsNotUnderstood": "Je n'ai pas compris : {{tokens}}. Vous pouvez répondre avec d'autres numéros, ou appuyer sur Confirmer/Recommencer ci-dessous.",
-    "noSubjectsUnderstood": "Désolé, je n'ai pas compris. Veuillez répondre avec les numéros des matières séparés par des virgules, par ex. 1,3,5.",
-    "subjectsSoFar": "Sélectionné jusqu'à présent : {{subjects}}",
-    "confirmSubjects": "Est-ce bien vos matières ?",
-    "confirmButton": "Confirmer",
-    "redoButton": "Recommencer",
-    "subjectsSaved": "Super, vos matières sont enregistrées ! 🎉"
+    "selectSubjectsPrompt": "Parfait ! Quelles matières étudiez-vous ? Dites-le-moi simplement avec vos propres mots - ex. « Biologie, Chimie, et Maths Complémentaires ».\n\nMatières disponibles : {{subjectList}}",
+    "noSubjectsUnderstood": "Désolé, je n'ai reconnu aucune matière dans votre message. Pouvez-vous me dire lesquelles vous étudiez ?",
+    "subjectsSaved": "Super, c'est noté pour {{subjects}} ! 🎉 Si vous voulez changer vos matières plus tard, dites-le-moi simplement."
   },
   "menu": {
     "title": "Menu principal - que souhaitez-vous faire ?",

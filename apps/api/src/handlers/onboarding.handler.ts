@@ -8,10 +8,8 @@ import { StateTransitionService } from '../session/state-transition.service';
 import { UsersService } from '../users/users.service';
 import { I18nService } from '../i18n/i18n.service';
 import { parseSubjectSelections, SUBJECTS_BY_LEVEL } from './subjects.constants';
+import { OnboardingSubjectParserService } from './onboarding-subject-parser.service';
 import { MainMenuHandler } from './main-menu.handler';
-
-const CONFIRM_SUBJECTS_BUTTON_ID = 'confirm_subjects';
-const REDO_SUBJECTS_BUTTON_ID = 'redo_subjects';
 
 @Injectable()
 export class OnboardingHandler {
@@ -23,6 +21,7 @@ export class OnboardingHandler {
     private readonly stateTransitionService: StateTransitionService,
     private readonly whatsappSendService: WhatsappSendService,
     private readonly i18n: I18nService,
+    private readonly subjectParser: OnboardingSubjectParserService,
     private readonly mainMenuHandler: MainMenuHandler,
   ) {}
 
@@ -58,37 +57,21 @@ export class OnboardingHandler {
     }
 
     const user = await this.usersService.updateLevel(phone, buttonId);
-    await this.sessionService.updateSessionField(phone, 'pendingSubjects', []);
 
     await this.sendSubjectPrompt(phone, buttonId, user.language);
 
     await this.stateTransitionService.transition(phone, ConversationState.SUBJECT_SELECTION);
   }
 
-  // Handles the Confirm/Redo buttons - the free-text reply itself (where a
-  // user actually picks subjects) is routed separately, straight to
-  // handleSubjectTextReply, since MessageRouterService classifies plain text
-  // as FREE_TEXT rather than MENU_SELECTION.
-  async handleSubjectSelection(message: ParsedMessage): Promise<void> {
-    if (message.type === 'button_reply' && message.buttonId === REDO_SUBJECTS_BUTTON_ID) {
-      return this.handleSubjectsRedo(message);
-    }
-
-    if (message.type === 'button_reply' && message.buttonId === CONFIRM_SUBJECTS_BUTTON_ID) {
-      return this.handleSubjectsConfirmed(message);
-    }
-
-    this.logger.warn(
-      `Unhandled subject-selection interaction from ${message.from}: type=${message.type} buttonId=${message.buttonId}`,
-    );
-  }
-
-  // A user can reply with several subjects in one message (numbers and/or
-  // names, comma-separated - e.g. "1,3,5" or "Biology, Physics") since
-  // WhatsApp's interactive list/button messages only support single
-  // selection per tap. Accumulates across multiple replies too: state stays
-  // SUBJECT_SELECTION until Confirm, so a follow-up text message merges into
-  // the same pendingSubjects list rather than replacing it.
+  // Replies with subjects conversationally now - "Biology, Chemistry, and
+  // Add Maths" works in one message, no numbered list or Confirm/Redo button
+  // round-trip required. An exact numbers/names reply (parseSubjectSelections)
+  // is resolved instantly with no LLM call; anything looser is handed to
+  // OnboardingSubjectParserService. Either way, the first confidently-parsed
+  // reply commits immediately and moves on to MAIN_MENU - if the model or
+  // student got something wrong, fixing it afterward is a normal
+  // conversation with the orchestrator's update_profile tool, not a second
+  // onboarding round-trip.
   async handleSubjectTextReply(message: ParsedMessage): Promise<void> {
     const phone = message.from;
     const user = await this.usersService.getUserProfile(phone);
@@ -106,35 +89,46 @@ export class OnboardingHandler {
 
     const { matched, unmatched } = parseSubjectSelections(message.text, SUBJECTS_BY_LEVEL[level]);
 
-    if (matched.length === 0) {
-      await this.whatsappSendService.sendText(
-        phone,
-        this.i18n.t('onboarding.noSubjectsUnderstood', lang),
-      );
-      return;
+    let subjects: string[];
+    if (matched.length > 0 && unmatched.length === 0) {
+      // Every token was a clean number/exact-name match - no ambiguity, so
+      // there's nothing for an LLM call to add here.
+      subjects = matched;
+    } else {
+      let result;
+      try {
+        result = await this.subjectParser.parseFreeform(message.text, level, lang, []);
+      } catch (error) {
+        this.logger.error(
+          `Onboarding subject parsing failed for ${phone}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        await this.whatsappSendService.sendText(
+          phone,
+          this.i18n.t('onboarding.noSubjectsUnderstood', lang),
+        );
+        return;
+      }
+
+      if (!result.matched) {
+        await this.whatsappSendService.sendText(
+          phone,
+          result.clarification ?? this.i18n.t('onboarding.noSubjectsUnderstood', lang),
+        );
+        return;
+      }
+      subjects = result.subjects;
     }
 
-    const session = await this.sessionService.getSession(phone);
-    const pendingSubjects = session?.pendingSubjects ?? [];
-    for (const subjectName of matched) {
-      if (!pendingSubjects.includes(subjectName)) {
-        pendingSubjects.push(subjectName);
-      }
-    }
-    await this.sessionService.updateSessionField(phone, 'pendingSubjects', pendingSubjects);
+    await this.usersService.updateSubjects(phone, subjects);
+    await this.stateTransitionService.transition(phone, ConversationState.MAIN_MENU);
 
     await this.whatsappSendService.sendText(
       phone,
-      this.i18n.t('onboarding.subjectsSoFar', lang, { subjects: pendingSubjects.join(', ') }),
+      this.i18n.t('onboarding.subjectsSaved', lang, { subjects: subjects.join(', ') }),
     );
-    if (unmatched.length > 0) {
-      await this.whatsappSendService.sendText(
-        phone,
-        this.i18n.t('onboarding.subjectsNotUnderstood', lang, { tokens: unmatched.join(', ') }),
-      );
-    }
-
-    await this.sendSubjectConfirmation(phone, lang);
+    await this.mainMenuHandler.sendMenu(phone);
   }
 
   // Public: reused by CommandHandler's /settings command to re-run this same step.
@@ -146,55 +140,11 @@ export class OnboardingHandler {
   }
 
   private async sendSubjectPrompt(phone: string, level: Level, lang: Language): Promise<void> {
-    const subjectList = SUBJECTS_BY_LEVEL[level]
-      .map((subject, index) => `${index + 1}. ${subject.name}`)
-      .join('\n');
+    const subjectList = SUBJECTS_BY_LEVEL[level].map((subject) => subject.name).join(', ');
 
     await this.whatsappSendService.sendText(
       phone,
       this.i18n.t('onboarding.selectSubjectsPrompt', lang, { subjectList }),
     );
-  }
-
-  private async sendSubjectConfirmation(phone: string, lang: Language): Promise<void> {
-    await this.whatsappSendService.sendButtons(
-      phone,
-      this.i18n.t('onboarding.confirmSubjects', lang),
-      [
-        { id: CONFIRM_SUBJECTS_BUTTON_ID, title: this.i18n.t('onboarding.confirmButton', lang) },
-        { id: REDO_SUBJECTS_BUTTON_ID, title: this.i18n.t('onboarding.redoButton', lang) },
-      ],
-    );
-  }
-
-  private async handleSubjectsRedo(message: ParsedMessage): Promise<void> {
-    const phone = message.from;
-    await this.sessionService.updateSessionField(phone, 'pendingSubjects', []);
-
-    const user = await this.usersService.getUserProfile(phone);
-    const lang = user?.language ?? Language.EN;
-    const level = user?.level ?? Level.O_LEVEL;
-
-    await this.sendSubjectPrompt(phone, level, lang);
-  }
-
-  private async handleSubjectsConfirmed(message: ParsedMessage): Promise<void> {
-    const phone = message.from;
-    const session = await this.sessionService.getSession(phone);
-    const subjects = session?.pendingSubjects ?? [];
-
-    const user = await this.usersService.getUserProfile(phone);
-    const lang = user?.language ?? Language.EN;
-
-    if (subjects.length === 0) {
-      this.logger.warn(`${phone} pressed Confirm with no subjects selected`);
-      return this.sendSubjectPrompt(phone, user?.level ?? Level.O_LEVEL, lang);
-    }
-
-    await this.usersService.updateSubjects(phone, subjects);
-    await this.stateTransitionService.transition(phone, ConversationState.MAIN_MENU);
-
-    await this.whatsappSendService.sendText(phone, this.i18n.t('onboarding.subjectsSaved', lang));
-    await this.mainMenuHandler.sendMenu(phone);
   }
 }

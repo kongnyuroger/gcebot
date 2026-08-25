@@ -107,8 +107,11 @@ export class MessageRouterService {
     switch (session?.state) {
       case ConversationState.LEVEL_SELECTION:
         return this.onboardingHandler.handleLevelSelection(message);
-      case ConversationState.SUBJECT_SELECTION:
-        return this.onboardingHandler.handleSubjectSelection(message);
+      // No case for SUBJECT_SELECTION: onboarding no longer sends any
+      // buttons at this step (subjects are given conversationally - see
+      // OnboardingHandler.handleSubjectTextReply), so a button/list tap
+      // arriving in this state has nothing to dispatch to and falls through
+      // to the default menu fallback below.
       case ConversationState.MAIN_MENU:
         return this.mainMenuHandler.handleSelection(message);
       case ConversationState.QA_MODE:

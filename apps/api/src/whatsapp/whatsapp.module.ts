@@ -21,6 +21,7 @@ import { OrchestratorModule } from '../orchestrator/orchestrator.module';
 import { MOCK_EXAM_TIMER_QUEUE_NAME } from '../mock/queues/mock-exam-timer.queue';
 import { MockExamTimerProcessor } from '../mock/processors/mock-exam-timer.processor';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
+import { OnboardingSubjectParserService } from '../handlers/onboarding-subject-parser.service';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../handlers/practice-mode.handler';
@@ -70,6 +71,7 @@ import { OrchestratorService } from '../orchestrator/orchestrator.service';
     WhatsappSendService,
     WhatsappRateLimitGuard,
     OnboardingHandler,
+    OnboardingSubjectParserService,
     MainMenuHandler,
     QaModeHandler,
     PracticeModeHandler,
@@ -85,9 +87,8 @@ import { OrchestratorService } from '../orchestrator/orchestrator.service';
     // Same WhatsappSendService reasoning as WeeklyReportService above.
     MilestoneService,
     BroadcastProcessor,
-    // Same WhatsappSendService reasoning as ProgressHandler above. Not yet
-    // called by anything (router wiring is a later step of this branch) -
-    // registered here so it's a real, DI-resolvable service ready to wire in.
+    // Same WhatsappSendService reasoning as ProgressHandler above - called by
+    // MessageRouterService for FREE_TEXT in MAIN_MENU.
     OrchestratorService,
   ],
   exports: [WhatsappSendService],
