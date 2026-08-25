@@ -7,6 +7,7 @@ import { SessionModule } from '../session/session.module';
 import { ProgressModule } from '../progress/progress.module';
 import { QuotaModule } from '../quota/quota.module';
 import { ToolExecutorService } from './tool-executor.service';
+import { SystemPromptBuilderService } from './system-prompt-builder.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { ToolExecutorService } from './tool-executor.service';
     ProgressModule,
     QuotaModule,
   ],
-  providers: [ToolExecutorService],
-  exports: [ToolExecutorService],
+  providers: [ToolExecutorService, SystemPromptBuilderService],
+  exports: [ToolExecutorService, SystemPromptBuilderService],
 })
 export class OrchestratorModule {}
