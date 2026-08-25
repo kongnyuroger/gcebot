@@ -7,6 +7,7 @@ import { UsersService } from '../users/users.service';
 import { SessionService } from '../session/session.service';
 import { StateTransitionService } from '../session/state-transition.service';
 import { ProgressStatsService } from '../progress/progress-stats.service';
+import { QuotaService } from '../quota/quota.service';
 import { TOOL_NAMES } from './tools/tool-definitions';
 import { ToolExecutorService } from './tool-executor.service';
 
@@ -25,6 +26,7 @@ describe('ToolExecutorService', () => {
   let updateSessionField: jest.Mock;
   let transition: jest.Mock;
   let getTopicStats: jest.Mock;
+  let checkQuota: jest.Mock;
 
   const phone = '237670000011';
 
@@ -67,6 +69,7 @@ describe('ToolExecutorService', () => {
     updateSessionField = jest.fn();
     transition = jest.fn();
     getTopicStats = jest.fn().mockResolvedValue([]);
+    checkQuota = jest.fn().mockResolvedValue({ allowed: true, used: 0, limit: 10 });
 
     executor = new ToolExecutorService(
       { answerQuestion } as unknown as QaService,
@@ -82,6 +85,7 @@ describe('ToolExecutorService', () => {
       { getSession, updateSessionField } as unknown as SessionService,
       { transition } as unknown as StateTransitionService,
       { getTopicStats } as unknown as ProgressStatsService,
+      { checkQuota } as unknown as QuotaService,
     );
   });
 
@@ -102,6 +106,19 @@ describe('ToolExecutorService', () => {
 
       expect(result).toEqual({ error: expect.any(String) });
       expect(answerQuestion).not.toHaveBeenCalled();
+    });
+
+    it('declines gracefully once the FREE-tier daily quota is exceeded, without calling QaService', async () => {
+      checkQuota.mockResolvedValue({ allowed: false, used: 10, limit: 10 });
+
+      const result = await executor.execute(
+        TOOL_NAMES.ANSWER_QUESTION,
+        { question: 'What is osmosis?' },
+        phone,
+      );
+
+      expect(answerQuestion).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ allowed: false, quotaExceeded: true, used: 10, limit: 10 });
     });
   });
 

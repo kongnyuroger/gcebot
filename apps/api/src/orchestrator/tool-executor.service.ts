@@ -9,6 +9,7 @@ import { UsersService } from '../users/users.service';
 import { SessionService } from '../session/session.service';
 import { StateTransitionService } from '../session/state-transition.service';
 import { ProgressStatsService, WEAK_ACCURACY_THRESHOLD } from '../progress/progress-stats.service';
+import { QuotaService } from '../quota/quota.service';
 import { TOOL_NAMES, ToolName } from './tools/tool-definitions';
 
 const PREMIUM_TIERS: SubscriptionTier[] = [SubscriptionTier.PREMIUM, SubscriptionTier.FAMILY];
@@ -37,6 +38,7 @@ export class ToolExecutorService {
     private readonly sessionService: SessionService,
     private readonly stateTransitionService: StateTransitionService,
     private readonly progressStatsService: ProgressStatsService,
+    private readonly quotaService: QuotaService,
   ) {}
 
   async execute(toolName: ToolName, args: Record<string, unknown>, phone: string): Promise<object> {
@@ -75,6 +77,24 @@ export class ToolExecutorService {
       return { error: 'No question was provided.' };
     }
     const subject = typeof args.subject === 'string' ? args.subject : undefined;
+
+    // Mirrors QaModeHandler.handleQuestion's server-side gate - FREE tier's
+    // daily question limit must be enforced here too, not just left to the
+    // model's own judgment from whatever the system prompt says its quota
+    // is (same "always call through, let the tool decide" reasoning as
+    // start_mock_exam's tier gate above).
+    const quota = await this.quotaService.checkQuota(phone);
+    if (!quota.allowed) {
+      return {
+        allowed: false,
+        quotaExceeded: true,
+        used: quota.used,
+        limit: quota.limit,
+        message:
+          'The student has used all their free questions for today - relay this warmly as an ' +
+          'upgrade opportunity (Basic tier gives unlimited questions), never as a failure.',
+      };
+    }
 
     const parts = await this.qaService.answerQuestion(phone, question, subject);
     return { answer: parts.join('\n\n') };
