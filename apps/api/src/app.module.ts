@@ -11,6 +11,7 @@ import { SessionModule } from './session/session.module';
 import { UsersModule } from './users/users.module';
 import { RagModule } from './rag/rag.module';
 import { AdminModule } from './admin/admin.module';
+import { OrchestratorModule } from './orchestrator/orchestrator.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AdminModule } from './admin/admin.module';
     UsersModule,
     RagModule,
     AdminModule,
+    OrchestratorModule,
   ],
   controllers: [AppController],
   providers: [AppService],

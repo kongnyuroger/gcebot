@@ -188,4 +188,30 @@ describe('QaService', () => {
       );
     });
   });
+
+  describe('updateHistory option', () => {
+    it('writes conversationHistory by default (normal, non-cached path)', async () => {
+      await service.answerQuestion(phone, 'What is 2 + 2?');
+
+      expect(updateSessionField).toHaveBeenCalledWith(
+        phone,
+        'conversationHistory',
+        expect.any(Array),
+      );
+    });
+
+    it('skips the conversationHistory write when updateHistory is false (normal path)', async () => {
+      await service.answerQuestion(phone, 'What is 2 + 2?', undefined, { updateHistory: false });
+
+      expect(updateSessionField).not.toHaveBeenCalled();
+    });
+
+    it('skips the conversationHistory write when updateHistory is false (cache-hit path)', async () => {
+      getCached.mockResolvedValue(['A cached answer.']);
+
+      await service.answerQuestion(phone, 'What is 2 + 2?', undefined, { updateHistory: false });
+
+      expect(updateSessionField).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -17,9 +17,11 @@ import { QuotaModule } from '../quota/quota.module';
 import { PracticeModule } from '../practice/practice.module';
 import { MockModule } from '../mock/mock.module';
 import { ProgressModule } from '../progress/progress.module';
+import { OrchestratorModule } from '../orchestrator/orchestrator.module';
 import { MOCK_EXAM_TIMER_QUEUE_NAME } from '../mock/queues/mock-exam-timer.queue';
 import { MockExamTimerProcessor } from '../mock/processors/mock-exam-timer.processor';
 import { OnboardingHandler } from '../handlers/onboarding.handler';
+import { OnboardingSubjectParserService } from '../handlers/onboarding-subject-parser.service';
 import { MainMenuHandler } from '../handlers/main-menu.handler';
 import { QaModeHandler } from '../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../handlers/practice-mode.handler';
@@ -30,6 +32,7 @@ import { MilestoneService } from '../progress/milestone.service';
 import { AdminModule } from '../admin/admin.module';
 import { BROADCAST_QUEUE_NAME } from '../admin/queues/broadcast.queue';
 import { BroadcastProcessor } from '../admin/processors/broadcast.processor';
+import { OrchestratorService } from '../orchestrator/orchestrator.service';
 
 @Module({
   imports: [
@@ -42,6 +45,11 @@ import { BroadcastProcessor } from '../admin/processors/broadcast.processor';
     PracticeModule,
     MockModule,
     ProgressModule,
+    // For ToolExecutorService/SystemPromptBuilderService, used by
+    // OrchestratorService below - same safe one-way import as AdminModule
+    // just below (OrchestratorModule depends on nothing that imports
+    // WhatsappModule back).
+    OrchestratorModule,
     // For BroadcastService, used by BroadcastProcessor below - a safe
     // one-way import (AdminModule depends on nothing that imports
     // WhatsappModule), unlike the reverse direction MockExamTimerProcessor/
@@ -63,6 +71,7 @@ import { BroadcastProcessor } from '../admin/processors/broadcast.processor';
     WhatsappSendService,
     WhatsappRateLimitGuard,
     OnboardingHandler,
+    OnboardingSubjectParserService,
     MainMenuHandler,
     QaModeHandler,
     PracticeModeHandler,
@@ -78,6 +87,9 @@ import { BroadcastProcessor } from '../admin/processors/broadcast.processor';
     // Same WhatsappSendService reasoning as WeeklyReportService above.
     MilestoneService,
     BroadcastProcessor,
+    // Same WhatsappSendService reasoning as ProgressHandler above - called by
+    // MessageRouterService for FREE_TEXT in MAIN_MENU.
+    OrchestratorService,
   ],
   exports: [WhatsappSendService],
 })

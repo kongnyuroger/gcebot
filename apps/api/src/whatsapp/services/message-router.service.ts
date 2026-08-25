@@ -11,6 +11,7 @@ import { MainMenuHandler } from '../../handlers/main-menu.handler';
 import { QaModeHandler } from '../../handlers/qa-mode.handler';
 import { PracticeModeHandler } from '../../handlers/practice-mode.handler';
 import { MockExamHandler } from '../../handlers/mock-exam.handler';
+import { OrchestratorService } from '../../orchestrator/orchestrator.service';
 
 export enum MessageIntent {
   COMMAND = 'COMMAND',
@@ -35,6 +36,7 @@ export class MessageRouterService {
     private readonly qaModeHandler: QaModeHandler,
     private readonly practiceModeHandler: PracticeModeHandler,
     private readonly mockExamHandler: MockExamHandler,
+    private readonly orchestratorService: OrchestratorService,
   ) {}
 
   async route(message: ParsedMessage): Promise<void> {
@@ -85,6 +87,17 @@ export class MessageRouterService {
       return this.mockExamHandler.handleAnswer(message);
     }
 
+    // The one deliberate behavior change of this branch: typing free text
+    // from MAIN_MENU used to fall through to FreeTextHandler's generic "I
+    // didn't understand, here's the menu" reply - the exact "typing instead
+    // of tapping doesn't work" friction the orchestrator rebuild exists to
+    // fix. Every other state/intent in this router (commands, button/list
+    // taps, the other free-text states above) is untouched - those flows
+    // still work exactly as before if the student prefers using buttons.
+    if (session?.state === ConversationState.MAIN_MENU) {
+      return this.orchestratorService.handleMessage(message);
+    }
+
     return this.freeTextHandler.handle(message);
   }
 
@@ -94,8 +107,11 @@ export class MessageRouterService {
     switch (session?.state) {
       case ConversationState.LEVEL_SELECTION:
         return this.onboardingHandler.handleLevelSelection(message);
-      case ConversationState.SUBJECT_SELECTION:
-        return this.onboardingHandler.handleSubjectSelection(message);
+      // No case for SUBJECT_SELECTION: onboarding no longer sends any
+      // buttons at this step (subjects are given conversationally - see
+      // OnboardingHandler.handleSubjectTextReply), so a button/list tap
+      // arriving in this state has nothing to dispatch to and falls through
+      // to the default menu fallback below.
       case ConversationState.MAIN_MENU:
         return this.mainMenuHandler.handleSelection(message);
       case ConversationState.QA_MODE:
