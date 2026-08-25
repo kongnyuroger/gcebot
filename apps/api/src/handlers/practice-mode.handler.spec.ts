@@ -6,25 +6,28 @@ import { WhatsappSendService } from '../whatsapp/services/whatsapp-send.service'
 import { I18nService } from '../i18n/i18n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService } from '../practice/past-question.service';
-import { LlmService } from '../rag/services/llm.service';
+import { PracticeGradingService } from '../practice/practice-grading.service';
 import { ResponseFormatterService } from '../rag/services/response-formatter.service';
 import { TopicWeaknessService } from '../practice/topic-weakness.service';
-import { TopicScoreService } from '../practice/topic-score.service';
 import { StreakService } from '../progress/streak.service';
 import { MilestoneService } from '../progress/milestone.service';
 import { MainMenuHandler } from './main-menu.handler';
 import { PracticeModeHandler } from './practice-mode.handler';
 
-describe('PracticeModeHandler - MCQ grading', () => {
+// Grading itself (MCQ/essay correctness, LLM explanations, marking-scheme
+// lookup, Interaction/topic-score persistence) is now owned entirely by
+// PracticeGradingService and tested there - see practice-grading.service.spec.ts.
+// These tests cover only what the handler still owns: recognizing an active
+// question, delegating to the grading service with the right input, sending
+// back whatever feedback it returns, and post-answer navigation.
+describe('PracticeModeHandler - answer delegation', () => {
   let handler: PracticeModeHandler;
   let getUserProfile: jest.Mock;
   let getSession: jest.Mock;
-  let updateSessionField: jest.Mock;
   let sendText: jest.Mock;
-  let findUniqueChunk: jest.Mock;
-  let interactionCreate: jest.Mock;
-  let generate: jest.Mock;
-  let recordResult: jest.Mock;
+  let sendList: jest.Mock;
+  let gradeAnswer: jest.Mock;
+  let recordActivity: jest.Mock;
 
   const phone = '237670000011';
 
@@ -52,105 +55,76 @@ describe('PracticeModeHandler - MCQ grading', () => {
       .fn()
       .mockResolvedValue({ language: 'EN', level: 'O_LEVEL', tier: 'FREE' });
     getSession = jest.fn().mockResolvedValue(buildSession());
-    updateSessionField = jest.fn();
     sendText = jest.fn();
-    findUniqueChunk = jest.fn().mockResolvedValue({
-      id: 'scheme-1',
-      content: 'Question 1. Paper 1. Correct answer: A. Subtract 5, then divide by 2.',
-    });
-    interactionCreate = jest.fn();
-    generate = jest.fn().mockResolvedValue('Explanation of why A is correct.');
-    recordResult = jest.fn();
+    sendList = jest.fn();
+    gradeAnswer = jest
+      .fn()
+      .mockResolvedValue({ correct: true, feedback: '✅ Correct! Nice work.' });
+    recordActivity = jest.fn();
 
     handler = new PracticeModeHandler(
       { getUserProfile } as unknown as UsersService,
-      { getSession, updateSessionField } as unknown as SessionService,
+      { getSession, updateSessionField: jest.fn() } as unknown as SessionService,
       { transition: jest.fn() } as unknown as StateTransitionService,
-      { sendText, sendButtons: jest.fn(), sendList: jest.fn() } as unknown as WhatsappSendService,
+      { sendText, sendButtons: jest.fn(), sendList } as unknown as WhatsappSendService,
       new I18nService(),
-      {
-        embeddingChunk: { findUnique: findUniqueChunk },
-        interaction: { create: interactionCreate },
-      } as unknown as PrismaService,
+      {} as unknown as PrismaService,
       {} as unknown as PastQuestionService,
-      { generate } as unknown as LlmService,
+      { gradeAnswer } as unknown as PracticeGradingService,
       new ResponseFormatterService(),
       {} as unknown as TopicWeaknessService,
-      { recordResult } as unknown as TopicScoreService,
-      { recordActivity: jest.fn() } as unknown as StreakService,
+      { recordActivity } as unknown as StreakService,
       { checkMilestone: jest.fn() } as unknown as MilestoneService,
       { sendMenu: jest.fn() } as unknown as MainMenuHandler,
     );
   });
 
-  it('grades a correct bare-letter MCQ answer', async () => {
+  it('delegates to PracticeGradingService with the active question and session context', async () => {
     await handler.handleAnswer(buildAnswerMessage('m1', 'A'));
 
-    expect(sendText).toHaveBeenCalledWith(phone, expect.stringMatching(/^✅ Correct!/));
-    expect(interactionCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ correct: true, userAnswer: 'A' }),
-      }),
-    );
-    expect(recordResult).toHaveBeenCalledWith(phone, 'Mathematics', 'Algebra', true);
-    // Correct answers don't need an LLM call - the scheme text is enough.
-    expect(generate).not.toHaveBeenCalled();
-  });
-
-  it('grades a correct full-text MCQ answer by matching it against the option text', async () => {
-    await handler.handleAnswer(buildAnswerMessage('m2', 'x=5'));
-
-    expect(sendText).toHaveBeenCalledWith(phone, expect.stringMatching(/^✅ Correct!/));
-    expect(interactionCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ correct: true }) }),
-    );
-  });
-
-  it('grades a wrong MCQ answer using a real LLM explanation', async () => {
-    await handler.handleAnswer(buildAnswerMessage('m3', 'B'));
-
-    expect(generate).toHaveBeenCalledTimes(1);
-    expect(sendText).toHaveBeenCalledWith(
+    expect(gradeAnswer).toHaveBeenCalledWith({
       phone,
-      '❌ Not quite. The correct answer is A. Explanation of why A is correct.',
-    );
-    expect(interactionCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ correct: false, userAnswer: 'B' }),
-      }),
-    );
-    expect(recordResult).toHaveBeenCalledWith(phone, 'Mathematics', 'Algebra', false);
+      questionText: mcqQuestionText,
+      markingSchemeChunkId: 'scheme-1',
+      questionType: 'MCQ',
+      subject: 'Mathematics',
+      topic: 'Algebra',
+      answerText: 'A',
+      language: 'EN',
+    });
   });
 
-  it('treats an unrecognized free-text answer as wrong, not a crash', async () => {
-    await handler.handleAnswer(buildAnswerMessage('m4', 'I have no idea'));
+  it('sends the returned feedback and the post-answer navigation list', async () => {
+    await handler.handleAnswer(buildAnswerMessage('m2', 'A'));
 
-    expect(interactionCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ correct: false }) }),
-    );
+    expect(sendText).toHaveBeenCalledWith(phone, '✅ Correct! Nice work.');
+    expect(sendList).toHaveBeenCalled();
   });
 
-  it('falls back gracefully when no marking scheme can be found, without grading', async () => {
-    findUniqueChunk.mockResolvedValue(null);
+  it('records streak/milestone activity before grading', async () => {
+    await handler.handleAnswer(buildAnswerMessage('m3', 'A'));
 
-    await handler.handleAnswer(buildAnswerMessage('m5', 'A'));
-
-    expect(sendText).toHaveBeenCalledWith(
-      phone,
-      "I couldn't automatically grade this question, but I've recorded your answer.",
-    );
-    expect(interactionCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ correct: null }) }),
-    );
-    expect(recordResult).not.toHaveBeenCalled();
+    expect(recordActivity).toHaveBeenCalledWith(phone);
   });
 
   it('does nothing when there is no active question in session', async () => {
     getSession.mockResolvedValue({ state: 'ANSWER_EVALUATION' });
 
-    await handler.handleAnswer(buildAnswerMessage('m6', 'A'));
+    await handler.handleAnswer(buildAnswerMessage('m4', 'A'));
 
-    expect(interactionCreate).not.toHaveBeenCalled();
+    expect(gradeAnswer).not.toHaveBeenCalled();
     expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it('ignores a non-text message while ANSWER_EVALUATION', async () => {
+    await handler.handleAnswer({
+      from: phone,
+      messageId: 'm5',
+      timestamp: 1720000000,
+      type: 'button_reply',
+      buttonId: 'x',
+    });
+
+    expect(gradeAnswer).not.toHaveBeenCalled();
   });
 });

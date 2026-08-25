@@ -1,6 +1,6 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import { ConversationState, SessionContext } from '@gcebot/shared';
-import { DocType, InteractionType, Language, Level } from '../../generated/prisma';
+import { ConversationState } from '@gcebot/shared';
+import { DocType, Language, Level } from '../../generated/prisma';
 import { ParsedMessage } from '../whatsapp/services/message-parser.service';
 import { WhatsappSendService, WhatsAppListRow } from '../whatsapp/services/whatsapp-send.service';
 import { SessionService } from '../session/session.service';
@@ -10,15 +10,8 @@ import { I18nService } from '../i18n/i18n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PastQuestionService, PastQuestion, QuestionType } from '../practice/past-question.service';
 import { TopicWeaknessService } from '../practice/topic-weakness.service';
-import { TopicScoreService } from '../practice/topic-score.service';
-import {
-  QUESTION_PREFIX_PATTERN,
-  parseOptions,
-  normalizeStudentAnswer,
-  extractCorrectAnswerLetter,
-  extractSchemeExplanation,
-} from '../practice/mcq-grading.util';
-import { LlmService } from '../rag/services/llm.service';
+import { PracticeGradingService } from '../practice/practice-grading.service';
+import { QUESTION_PREFIX_PATTERN } from '../practice/mcq-grading.util';
 import { ResponseFormatterService } from '../rag/services/response-formatter.service';
 import { StreakService } from '../progress/streak.service';
 import { MilestoneService } from '../progress/milestone.service';
@@ -48,45 +41,6 @@ export const TYPE_STRUCTURED = 'STRUCTURED';
 export const TYPE_ANY = 'ANY_TYPE';
 const VALID_TYPES = [TYPE_MCQ, TYPE_STRUCTURED, TYPE_ANY];
 
-function buildWrongAnswerPrompt(
-  subject: string,
-  question: string,
-  scheme: string,
-  studentAnswer: string,
-  correctLetter: string,
-): string {
-  return (
-    `Act as a GCE examiner marking a multiple-choice ${subject} question. ` +
-    `Question: ${question}\nMarking scheme: ${scheme}\nStudent's answer: ${studentAnswer}\n` +
-    `Correct answer: ${correctLetter}\n` +
-    `Explain the concept and why ${correctLetter} is correct. Keep it to 1-3 sentences.`
-  );
-}
-
-function buildEssayFeedbackPrompt(
-  subject: string,
-  question: string,
-  scheme: string,
-  studentAnswer: string,
-): string {
-  return (
-    `Act as a GCE examiner marking this ${subject} answer.\n` +
-    `Question: ${question}\n` +
-    `Marking scheme: ${scheme}\n` +
-    `Student's answer: ${studentAnswer}\n` +
-    'Provide feedback as:\n' +
-    '✅ Points you got right: [list]\n' +
-    '⚠️ Points you missed: [list]\n' +
-    '📊 Estimated mark: [X out of Y]\n' +
-    '💡 One tip to improve: [tip]'
-  );
-}
-
-// Parses the "📊 Estimated mark: X out of Y" (or "X/Y") line the LLM was
-// instructed to produce, to derive a pass/fail boolean for Interaction.correct.
-const ESTIMATED_MARK_PATTERN = /estimated mark:?\s*(\d+)\s*(?:\/|out of)\s*(\d+)/i;
-const PASSING_MARK_RATIO = 0.5;
-
 @Injectable()
 export class PracticeModeHandler {
   private readonly logger = new Logger(PracticeModeHandler.name);
@@ -99,10 +53,9 @@ export class PracticeModeHandler {
     private readonly i18n: I18nService,
     private readonly prisma: PrismaService,
     private readonly pastQuestionService: PastQuestionService,
-    private readonly llmService: LlmService,
+    private readonly practiceGradingService: PracticeGradingService,
     private readonly responseFormatter: ResponseFormatterService,
     private readonly topicWeaknessService: TopicWeaknessService,
-    private readonly topicScoreService: TopicScoreService,
     private readonly streakService: StreakService,
     private readonly milestoneService: MilestoneService,
     // MainMenuHandler already depends on PracticeModeHandler (to enter
@@ -354,11 +307,22 @@ export class PracticeModeHandler {
 
     await this.recordActivity(phone);
 
-    if (session.questionType === TYPE_MCQ) {
-      return this.handleMcqAnswer(phone, answerText, session, lang);
+    const result = await this.practiceGradingService.gradeAnswer({
+      phone,
+      questionText: session.currentQuestionText,
+      markingSchemeChunkId: session.markingSchemeChunkId,
+      questionType: session.questionType as QuestionType,
+      subject: session.practice?.subject ?? 'Unknown',
+      topic: session.practice?.topic ?? 'General',
+      answerText,
+      language: lang,
+    });
+
+    for (const part of this.responseFormatter.formatForWhatsApp(result.feedback)) {
+      await this.whatsappSendService.sendText(phone, part);
     }
 
-    return this.handleEssayAnswer(phone, answerText, session, lang);
+    await this.sendPostAnswerNav(phone, lang);
   }
 
   // Button/list reply while ANSWER_EVALUATION, after grading feedback has
@@ -438,170 +402,6 @@ export class PracticeModeHandler {
         },
       ],
     );
-  }
-
-  private async handleEssayAnswer(
-    phone: string,
-    answerText: string,
-    session: SessionContext,
-    lang: Language,
-  ): Promise<void> {
-    const questionText = session.currentQuestionText!;
-    const subject = session.practice?.subject ?? 'Unknown';
-    const topic = session.practice?.topic ?? 'General';
-
-    const schemeChunk = session.markingSchemeChunkId
-      ? await this.prisma.embeddingChunk.findUnique({ where: { id: session.markingSchemeChunkId } })
-      : null;
-
-    if (!schemeChunk) {
-      this.logger.warn(
-        `No marking scheme found for ${phone}'s structured question (markingSchemeChunkId=${session.markingSchemeChunkId})`,
-      );
-      await this.whatsappSendService.sendText(
-        phone,
-        this.i18n.t('practice.essayGradingUnavailable', lang),
-      );
-      await this.prisma.interaction.create({
-        data: {
-          userId: phone,
-          type: InteractionType.PRACTICE,
-          subject,
-          topic,
-          questionText,
-          userAnswer: answerText,
-          correct: null,
-        },
-      });
-      await this.sendPostAnswerNav(phone, lang);
-      return;
-    }
-
-    const feedback = await this.llmService.generate(
-      buildEssayFeedbackPrompt(subject, questionText, schemeChunk.content, answerText),
-      'Provide feedback on my answer.',
-      { complexity: 'complex' },
-    );
-
-    for (const part of this.responseFormatter.formatForWhatsApp(feedback)) {
-      await this.whatsappSendService.sendText(phone, part);
-    }
-
-    const estimatedCorrect = this.extractEstimatedCorrectness(feedback);
-
-    await this.prisma.interaction.create({
-      data: {
-        userId: phone,
-        type: InteractionType.PRACTICE,
-        subject,
-        topic,
-        questionText,
-        userAnswer: answerText,
-        correct: estimatedCorrect,
-      },
-    });
-
-    if (estimatedCorrect !== null) {
-      await this.topicScoreService.recordResult(phone, subject, topic, estimatedCorrect);
-    }
-
-    await this.sendPostAnswerNav(phone, lang);
-  }
-
-  private extractEstimatedCorrectness(feedback: string): boolean | null {
-    const match = feedback.match(ESTIMATED_MARK_PATTERN);
-    if (!match) {
-      return null;
-    }
-
-    const scored = Number(match[1]);
-    const total = Number(match[2]);
-    if (!Number.isFinite(scored) || !Number.isFinite(total) || total === 0) {
-      return null;
-    }
-
-    return scored / total >= PASSING_MARK_RATIO;
-  }
-
-  private async handleMcqAnswer(
-    phone: string,
-    answerText: string,
-    session: SessionContext,
-    lang: Language,
-  ): Promise<void> {
-    const questionText = session.currentQuestionText!;
-    const options = parseOptions(questionText);
-    const studentLetter = normalizeStudentAnswer(answerText, options);
-
-    const schemeChunk = session.markingSchemeChunkId
-      ? await this.prisma.embeddingChunk.findUnique({ where: { id: session.markingSchemeChunkId } })
-      : null;
-    const correctLetter = schemeChunk ? extractCorrectAnswerLetter(schemeChunk.content) : null;
-
-    const subject = session.practice?.subject ?? 'Unknown';
-    const topic = session.practice?.topic ?? 'General';
-
-    if (!correctLetter) {
-      this.logger.warn(
-        `Could not determine the correct MCQ answer for ${phone} (markingSchemeChunkId=${session.markingSchemeChunkId})`,
-      );
-      await this.whatsappSendService.sendText(
-        phone,
-        this.i18n.t('practice.mcqGradingUnavailable', lang),
-      );
-      await this.prisma.interaction.create({
-        data: {
-          userId: phone,
-          type: InteractionType.PRACTICE,
-          subject,
-          topic,
-          questionText,
-          userAnswer: answerText,
-          correct: null,
-        },
-      });
-      await this.sendPostAnswerNav(phone, lang);
-      return;
-    }
-
-    const isCorrect = studentLetter !== null && studentLetter === correctLetter;
-    const schemeExplanation = extractSchemeExplanation(schemeChunk!.content);
-
-    const feedback = isCorrect
-      ? this.i18n.t('practice.mcqCorrect', lang, { explanation: schemeExplanation })
-      : this.i18n.t('practice.mcqWrong', lang, {
-          correctLetter,
-          // Wrong answers get a real LLM explanation of the concept, not just
-          // the raw scheme text - this is the actual teaching moment.
-          explanation: await this.llmService.generate(
-            buildWrongAnswerPrompt(
-              subject,
-              questionText,
-              schemeChunk!.content,
-              answerText,
-              correctLetter,
-            ),
-            'Explain why my answer was wrong.',
-            { complexity: 'simple' },
-          ),
-        });
-
-    await this.whatsappSendService.sendText(phone, feedback);
-
-    await this.prisma.interaction.create({
-      data: {
-        userId: phone,
-        type: InteractionType.PRACTICE,
-        subject,
-        topic,
-        questionText,
-        userAnswer: answerText,
-        correct: isCorrect,
-      },
-    });
-    await this.topicScoreService.recordResult(phone, subject, topic, isCorrect);
-
-    await this.sendPostAnswerNav(phone, lang);
   }
 
   private formatQuestion(question: PastQuestion, subject: string): string {
