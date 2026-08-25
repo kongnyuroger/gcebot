@@ -136,6 +136,76 @@ describe('OrchestratorService', () => {
     expect(sendText).toHaveBeenLastCalledWith(phone, 'A variable stores a value.');
   });
 
+  it("sends the thinking ack and any fallback text in the student's own language (French)", async () => {
+    getUserProfile.mockResolvedValue({ language: 'FR' });
+    generateWithTools.mockRejectedValue(new Error('OpenAI is down'));
+
+    await service.handleMessage(buildMessage('bonjour'));
+
+    expect(sendText).toHaveBeenNthCalledWith(1, phone, expect.stringMatching(/réfléchis/i));
+    expect(sendText).toHaveBeenLastCalledWith(phone, expect.stringMatching(/erreur/i));
+  });
+
+  it('relays a quota/tier upsell tool result through to the next round unmodified, not as an error', async () => {
+    const upsellResult = { allowed: false, quotaExceeded: true, used: 10, limit: 10 };
+    execute.mockResolvedValue(upsellResult);
+
+    generateWithTools
+      .mockResolvedValueOnce({
+        message: assistantMessage(null, [{ id: 'call_1', type: 'function', function: {} }]),
+        toolCalls: [
+          { id: 'call_1', name: TOOL_NAMES.ANSWER_QUESTION, arguments: '{"question":"x"}' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        message: assistantMessage("You've used today's free questions - want to upgrade?"),
+        toolCalls: [],
+      });
+
+    await service.handleMessage(buildMessage('another question'));
+
+    const secondCallMessages = generateWithTools.mock.calls[1][0];
+    expect(secondCallMessages).toContainEqual(
+      expect.objectContaining({ role: 'tool', content: JSON.stringify(upsellResult) }),
+    );
+    expect(sendText).toHaveBeenLastCalledWith(
+      phone,
+      "You've used today's free questions - want to upgrade?",
+    );
+  });
+
+  it('relays a tool-level {error} result through to the next round unmodified, not a crash', async () => {
+    const errorResult = { error: 'No unseen questions available right now.' };
+    execute.mockResolvedValue(errorResult);
+
+    generateWithTools
+      .mockResolvedValueOnce({
+        message: assistantMessage(null, [{ id: 'call_1', type: 'function', function: {} }]),
+        toolCalls: [
+          {
+            id: 'call_1',
+            name: TOOL_NAMES.GET_PRACTICE_QUESTION,
+            arguments: '{"subject":"Biology"}',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        message: assistantMessage("I couldn't find a new question - try a different topic?"),
+        toolCalls: [],
+      });
+
+    await service.handleMessage(buildMessage('give me a practice question'));
+
+    const secondCallMessages = generateWithTools.mock.calls[1][0];
+    expect(secondCallMessages).toContainEqual(
+      expect.objectContaining({ role: 'tool', content: JSON.stringify(errorResult) }),
+    );
+    expect(sendText).toHaveBeenLastCalledWith(
+      phone,
+      "I couldn't find a new question - try a different topic?",
+    );
+  });
+
   it('falls back to malformed-argument-safe {} rather than throwing on bad JSON', async () => {
     generateWithTools
       .mockResolvedValueOnce({
