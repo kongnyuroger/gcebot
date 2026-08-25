@@ -118,7 +118,16 @@ export class QaService {
     phone: string,
     question: string,
     subjectOverride?: string,
+    // The orchestrator's answer_question tool (ToolExecutorService) passes
+    // updateHistory: false - it owns conversationHistory itself now (one
+    // pair per turn: the student's original message and the orchestrator's
+    // own final composed reply, which may not literally be this method's
+    // return value if the model paraphrases it). Left defaulted to true so
+    // the older QaModeHandler flow, which has no other layer managing
+    // history, keeps working exactly as before.
+    options?: { updateHistory?: boolean },
   ): Promise<string[]> {
+    const shouldUpdateHistory = options?.updateHistory !== false;
     const user = await this.usersService.getUserProfile(phone);
     if (!user) {
       throw new NotFoundException(`User ${phone} not found`);
@@ -144,7 +153,9 @@ export class QaService {
         // fresh answer - no topic is available from a cache hit, so it falls
         // back to 'General' same as any other missing-topic case.
         await this.logInteraction(phone, subject, undefined, question, cached.join(' '));
-        await this.updateConversationHistory(phone, session, question, cached.join(' '));
+        if (shouldUpdateHistory) {
+          await this.updateConversationHistory(phone, session, question, cached.join(' '));
+        }
         // The Premium tip is specific to the requesting user's tier, not the
         // cached content itself (which is shared across users/tiers) - it is
         // appended per-request rather than baked into what gets cached.
@@ -185,7 +196,9 @@ export class QaService {
     const formattedParts = this.responseFormatter.formatForWhatsApp(answer);
 
     await this.logInteraction(phone, subject, results[0]?.topic, question, answer);
-    await this.updateConversationHistory(phone, session, question, answer);
+    if (shouldUpdateHistory) {
+      await this.updateConversationHistory(phone, session, question, answer);
+    }
 
     if (!isFollowUp) {
       await this.responseCache.setCache(question, filter, formattedParts);

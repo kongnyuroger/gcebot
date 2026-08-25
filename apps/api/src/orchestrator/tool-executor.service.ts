@@ -96,7 +96,14 @@ export class ToolExecutorService {
       };
     }
 
-    const parts = await this.qaService.answerQuestion(phone, question, subject);
+    // The orchestrator (OrchestratorService.persistHistory) owns
+    // conversationHistory for this turn - QaService must not also write its
+    // own {question, rawAnswer} pair, or history ends up with two
+    // conflicting versions of the same exchange (the RAG answer verbatim,
+    // and the orchestrator's own possibly-paraphrased final reply).
+    const parts = await this.qaService.answerQuestion(phone, question, subject, {
+      updateHistory: false,
+    });
     return { answer: parts.join('\n\n') };
   }
 

@@ -97,7 +97,9 @@ describe('ToolExecutorService', () => {
         phone,
       );
 
-      expect(answerQuestion).toHaveBeenCalledWith(phone, 'What is osmosis?', 'Biology');
+      expect(answerQuestion).toHaveBeenCalledWith(phone, 'What is osmosis?', 'Biology', {
+        updateHistory: false,
+      });
       expect(result).toEqual({ answer: 'Part one.\n\nPart two.' });
     });
 
