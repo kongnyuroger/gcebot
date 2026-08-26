@@ -130,6 +130,9 @@ export function DocumentUploadForm({ onUploaded }: DocumentUploadFormProps) {
     }
 
     setUploading(false);
+    // Clear the shared year so it can't be silently reused for the next
+    // batch of files dropped in this session - forces an explicit choice.
+    setSharedYear('');
     onUploaded();
   }
 
