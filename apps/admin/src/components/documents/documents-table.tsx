@@ -125,6 +125,7 @@ export function DocumentsTable({ refreshKey }: DocumentsTableProps) {
               <th className="px-4 py-3 font-medium">Level</th>
               <th className="px-4 py-3 font-medium">Type</th>
               <th className="px-4 py-3 font-medium">Year</th>
+              <th className="px-4 py-3 font-medium">Paper</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Chunks</th>
               <th className="px-4 py-3 font-medium">Uploaded</th>
@@ -134,14 +135,14 @@ export function DocumentsTable({ refreshKey }: DocumentsTableProps) {
           <tbody>
             {!data && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-6 text-center text-muted-foreground">
                   Loading...
                 </td>
               </tr>
             )}
             {data && data.documents.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-6 text-center text-muted-foreground">
                   No documents yet.
                 </td>
               </tr>
@@ -193,6 +194,7 @@ function DocumentRow({
         <td className="px-4 py-3">{levelLabel}</td>
         <td className="px-4 py-3">{docTypeLabel}</td>
         <td className="px-4 py-3">{doc.year ?? '-'}</td>
+        <td className="px-4 py-3">{doc.paperNumber ?? '-'}</td>
         <td className="px-4 py-3">
           <Badge
             className={cn(STATUS_STYLES[doc.ingestionStatus])}
@@ -215,7 +217,7 @@ function DocumentRow({
       {expanded && isFailed && (
         <tr className="border-t bg-destructive/5">
           <td />
-          <td colSpan={9} className="px-4 py-3 text-xs text-destructive">
+          <td colSpan={10} className="px-4 py-3 text-xs text-destructive">
             {doc.errorMessage ?? 'No error message recorded.'}
           </td>
         </tr>

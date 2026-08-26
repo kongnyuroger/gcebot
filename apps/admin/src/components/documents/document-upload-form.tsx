@@ -37,10 +37,12 @@ export function DocumentUploadForm({ onUploaded }: DocumentUploadFormProps) {
   const [docType, setDocType] = useState<DocType>('PAST_PAPER');
   const [topic, setTopic] = useState('');
   const [sharedYear, setSharedYear] = useState('');
+  const [sharedPaperNumber, setSharedPaperNumber] = useState('');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const subjectsForLevel = SUBJECTS_BY_LEVEL[level];
+  const showPaperNumber = docType === 'PAST_PAPER' || docType === 'MARKING_SCHEME';
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setEntries((prev) => [
@@ -97,6 +99,9 @@ export function DocumentUploadForm({ onUploaded }: DocumentUploadFormProps) {
       if (year) {
         formData.append('year', year);
       }
+      if (showPaperNumber && sharedPaperNumber) {
+        formData.append('paperNumber', sharedPaperNumber);
+      }
       if (topic) {
         formData.append('topic', topic);
       }
@@ -130,6 +135,10 @@ export function DocumentUploadForm({ onUploaded }: DocumentUploadFormProps) {
     }
 
     setUploading(false);
+    // Clear the shared year/paper so they can't be silently reused for the
+    // next batch of files dropped in this session - forces an explicit choice.
+    setSharedYear('');
+    setSharedPaperNumber('');
     onUploaded();
   }
 
@@ -215,6 +224,20 @@ export function DocumentUploadForm({ onUploaded }: DocumentUploadFormProps) {
               onChange={(event) => setSharedYear(event.target.value)}
             />
           </div>
+
+          {showPaperNumber && (
+            <div className="space-y-2">
+              <Label htmlFor="sharedPaperNumber">Paper number</Label>
+              <Input
+                id="sharedPaperNumber"
+                type="number"
+                min={1}
+                placeholder="e.g. 1"
+                value={sharedPaperNumber}
+                onChange={(event) => setSharedPaperNumber(event.target.value)}
+              />
+            </div>
+          )}
 
           <div className="space-y-2 sm:col-span-2 lg:col-span-4">
             <Label htmlFor="topic">Topic (optional)</Label>

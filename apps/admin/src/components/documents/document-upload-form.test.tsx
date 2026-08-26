@@ -120,4 +120,49 @@ describe('DocumentUploadForm', () => {
     expect(formData.get('docType')).toBe('PAST_PAPER');
     expect(formData.get('year')).toBe('2023');
   });
+
+  it('shows the paper number field for PAST_PAPER but hides it for a non-paper doc type', async () => {
+    const user = userEvent.setup();
+    render(<DocumentUploadForm onUploaded={jest.fn()} />);
+
+    // PAST_PAPER is the default docType, so the field starts visible.
+    expect(screen.getByLabelText('Paper number')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Document type'), 'Syllabus');
+
+    expect(screen.queryByLabelText('Paper number')).not.toBeInTheDocument();
+  });
+
+  it('includes the paper number in the submitted form data when set', async () => {
+    const user = userEvent.setup();
+    const onUploaded = jest.fn();
+    const { container } = render(<DocumentUploadForm onUploaded={onUploaded} />);
+
+    await user.selectOptions(screen.getByLabelText('Subject'), 'Biology');
+    await user.type(screen.getByLabelText('Paper number'), '2');
+    await user.upload(fileInput(container), pdfFile());
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+
+    await user.click(submitButton());
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+
+    const [, , formData] = mockUploadWithProgress.mock.calls[0];
+    expect(formData.get('paperNumber')).toBe('2');
+  });
+
+  it('resets the paper number field after a batch upload completes', async () => {
+    const user = userEvent.setup();
+    const onUploaded = jest.fn();
+    const { container } = render(<DocumentUploadForm onUploaded={onUploaded} />);
+
+    await user.selectOptions(screen.getByLabelText('Subject'), 'Biology');
+    await user.type(screen.getByLabelText('Paper number'), '1');
+    await user.upload(fileInput(container), pdfFile());
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+
+    await user.click(submitButton());
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+
+    expect(screen.getByLabelText('Paper number')).toHaveValue(null);
+  });
 });

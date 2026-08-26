@@ -104,4 +104,78 @@ describe('PastQuestionService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('marking scheme paper matching', () => {
+    it('filters the marking-scheme query by the selected question\'s paperNumber', async () => {
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'p2-question',
+            content: 'Question 3. Explain the carbon cycle.',
+            year: 2022,
+            topic: 'Ecology',
+            paperNumber: 2,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      await service.getQuestion(baseFilter, []);
+
+      expect(findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({ year: 2022, paperNumber: 2 }),
+        }),
+      );
+    });
+
+    it('omits the paperNumber constraint when the past-paper chunk was never tagged with one', async () => {
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'untagged-question',
+            content: 'Question 3. Explain the carbon cycle.',
+            year: 2022,
+            topic: 'Ecology',
+            paperNumber: null,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      await service.getQuestion(baseFilter, []);
+
+      const [, secondCallArgs] = findMany.mock.calls;
+      expect(secondCallArgs[0].where).not.toHaveProperty('paperNumber');
+    });
+
+    it('picks the marking scheme chunk from the matching paper, not another paper with the same question number', async () => {
+      // Simulates what Postgres itself would return once the generated WHERE
+      // clause (subject + year + paperNumber) is applied - both papers have
+      // a "Question 3" with the same subject/year, but only the Paper 1 one
+      // should survive the paperNumber filter.
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'p1-question',
+            content: 'Question 3. Explain the carbon cycle.',
+            year: 2022,
+            topic: 'Ecology',
+            paperNumber: 1,
+          },
+        ])
+        .mockImplementationOnce(({ where }: { where: { paperNumber?: number } }) => {
+          const markingSchemes = [
+            { id: 'p1-marking-scheme', content: 'Question 3. Award 1 mark for CO2, 1 for O2.' },
+            { id: 'p2-marking-scheme', content: 'Question 3. Award 2 marks for the diagram.' },
+          ];
+          return Promise.resolve(
+            where.paperNumber === 1 ? [markingSchemes[0]] : [markingSchemes[1]],
+          );
+        });
+
+      const result = await service.getQuestion(baseFilter, []);
+
+      expect(result?.markingSchemeChunkId).toBe('p1-marking-scheme');
+    });
+  });
 });

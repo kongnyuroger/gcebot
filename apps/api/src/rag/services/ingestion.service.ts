@@ -19,6 +19,7 @@ export interface IngestDocumentMetadata {
   level: Level;
   docType: DocType;
   year?: number;
+  paperNumber?: number;
   topic?: string;
 }
 
@@ -52,6 +53,7 @@ export class IngestionService {
         level: metadata.level,
         docType: metadata.docType,
         year: metadata.year,
+        paperNumber: metadata.paperNumber,
         ingestionStatus: IngestionStatus.QUEUED,
       },
     });
@@ -133,6 +135,7 @@ export class IngestionService {
         level: document.level,
         docType: document.docType,
         year: document.year ?? undefined,
+        paperNumber: document.paperNumber ?? undefined,
       }),
     });
 
@@ -147,6 +150,7 @@ export class IngestionService {
       subject: metadata.subject,
       level: metadata.level,
       year: metadata.year,
+      paperNumber: metadata.paperNumber,
       docType: metadata.docType,
       topic: metadata.topic,
     };

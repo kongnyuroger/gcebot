@@ -32,6 +32,7 @@ interface IngestRequestBody {
   level?: string;
   docType?: string;
   year?: string;
+  paperNumber?: string;
   topic?: string;
 }
 
@@ -65,6 +66,7 @@ export class DocumentsController {
     const level = this.parseLevel(body.level);
     const parsedDocType = this.parseDocType(docType);
     const year = this.parseYear(body.year);
+    const paperNumber = this.parsePaperNumber(body.paperNumber);
 
     if (!subject) {
       throw new BadRequestException('subject is required');
@@ -75,6 +77,7 @@ export class DocumentsController {
       level,
       docType: parsedDocType,
       year,
+      paperNumber,
       topic,
     });
 
@@ -137,6 +140,17 @@ export class DocumentsController {
       throw new BadRequestException('year must be an integer');
     }
     return year;
+  }
+
+  private parsePaperNumber(value?: string): number | undefined {
+    if (!value) {
+      return undefined;
+    }
+    const paperNumber = Number(value);
+    if (!Number.isInteger(paperNumber) || paperNumber < 1) {
+      throw new BadRequestException('paperNumber must be a positive integer');
+    }
+    return paperNumber;
   }
 
   private parseStatus(value: string): IngestionStatus {

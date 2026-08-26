@@ -99,6 +99,7 @@ model Document {
   level           Level
   docType         DocType
   year            Int?
+  paperNumber     Int?
   ingestionStatus IngestionStatus @default(QUEUED)
   errorMessage    String?
   chunkCount      Int             @default(0)
@@ -110,17 +111,18 @@ model Document {
 }
 
 model EmbeddingChunk {
-  id         String                      @id @default(cuid())
-  documentId String
-  document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  content    String
-  embedding  Unsupported("vector(1536)")
-  subject    String
-  level      Level
-  topic      String?
-  year       Int?
-  chunkIndex Int
-  createdAt  DateTime                    @default(now())
+  id          String                      @id @default(cuid())
+  documentId  String
+  document    Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content     String
+  embedding   Unsupported("vector(1536)")
+  subject     String
+  level       Level
+  topic       String?
+  year        Int?
+  paperNumber Int?
+  chunkIndex  Int
+  createdAt   DateTime                    @default(now())
 
   @@map("embedding_chunks")
 }

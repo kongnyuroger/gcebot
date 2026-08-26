@@ -30,6 +30,7 @@ interface CandidateChunk {
   content: string;
   year: number | null;
   topic: string | null;
+  paperNumber: number | null;
 }
 
 // Matches a chunk that starts a new question: either "Question 3" or a bare
@@ -59,7 +60,7 @@ export class PastQuestionService {
         id: excludeIds.length > 0 ? { notIn: excludeIds } : undefined,
         document: { docType: DocType.PAST_PAPER },
       },
-      select: { id: true, content: true, year: true, topic: true },
+      select: { id: true, content: true, year: true, topic: true, paperNumber: true },
     });
 
     const questions = candidates
@@ -76,6 +77,7 @@ export class PastQuestionService {
     const markingSchemeChunkId = await this.findMarkingSchemeChunkId(
       filter.subject,
       selected.chunk.year,
+      selected.chunk.paperNumber,
       selected.questionNumber,
     );
 
@@ -83,7 +85,9 @@ export class PastQuestionService {
       chunkId: selected.chunk.id,
       questionText: selected.chunk.content,
       year: selected.chunk.year ?? undefined,
-      paper: this.extractPaper(selected.chunk.content),
+      paper: selected.chunk.paperNumber
+        ? `Paper ${selected.chunk.paperNumber}`
+        : this.extractPaper(selected.chunk.content),
       questionNumber: selected.questionNumber,
       type: selected.type,
       markingSchemeChunkId,
@@ -127,12 +131,14 @@ export class PastQuestionService {
   private async findMarkingSchemeChunkId(
     subject: string,
     year: number | null,
+    paperNumber: number | null,
     questionNumber: string,
   ): Promise<string | undefined> {
     const candidates = await this.prisma.embeddingChunk.findMany({
       where: {
         subject,
         ...(year !== null ? { year } : {}),
+        ...(paperNumber !== null ? { paperNumber } : {}),
         document: { docType: DocType.MARKING_SCHEME },
       },
       select: { id: true, content: true },
