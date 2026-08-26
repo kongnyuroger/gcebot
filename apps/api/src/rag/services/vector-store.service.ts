@@ -33,14 +33,14 @@ export class VectorStoreService {
   }
 
   private buildInsert(chunk: ChunkToStore) {
-    const { documentId, subject, level, topic, year, chunkIndex } = chunk.metadata;
+    const { documentId, subject, level, topic, year, paperNumber, chunkIndex } = chunk.metadata;
     const embeddingLiteral = `[${chunk.embedding.join(',')}]`;
 
     return this.prisma.$executeRaw`
       INSERT INTO embedding_chunks
-        (id, "documentId", content, embedding, subject, level, topic, year, "chunkIndex", "createdAt")
+        (id, "documentId", content, embedding, subject, level, topic, year, "paperNumber", "chunkIndex", "createdAt")
       VALUES
-        (${randomUUID()}, ${documentId}, ${chunk.content}, ${embeddingLiteral}::vector, ${subject}, ${level}::"Level", ${topic ?? null}, ${year ?? null}, ${chunkIndex}, NOW())
+        (${randomUUID()}, ${documentId}, ${chunk.content}, ${embeddingLiteral}::vector, ${subject}, ${level}::"Level", ${topic ?? null}, ${year ?? null}, ${paperNumber ?? null}, ${chunkIndex}, NOW())
     `;
   }
 

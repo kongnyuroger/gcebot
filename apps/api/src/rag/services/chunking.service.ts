@@ -6,6 +6,7 @@ export interface ChunkMetadata {
   subject: string;
   level: string;
   year?: number;
+  paperNumber?: number;
   docType: string;
   // Optional document-level fallback used when a chunk has no auto-detected
   // topic (e.g. a syllabus with no "SECTION A"/"Question N"-style markers).
