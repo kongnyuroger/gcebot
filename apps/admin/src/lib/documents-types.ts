@@ -25,6 +25,7 @@ export interface AdminDocument {
   level: ExamLevel;
   docType: DocType;
   year: number | null;
+  paperNumber: number | null;
   ingestionStatus: IngestionStatus;
   errorMessage: string | null;
   chunkCount: number;
