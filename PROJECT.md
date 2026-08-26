@@ -12,6 +12,7 @@ instructions, see **[README.md](README.md)**.
 - [System overview](#system-overview)
 - [Conversation state machine](#conversation-state-machine)
 - [WhatsApp integration](#whatsapp-integration)
+- [AI orchestrator](#ai-orchestrator)
 - [RAG (retrieval-augmented generation)](#rag-retrieval-augmented-generation)
 - [Users & quota](#users--quota)
 - [Practice mode](#practice-mode)
@@ -29,10 +30,12 @@ instructions, see **[README.md](README.md)**.
 A student messages the bot on WhatsApp. Every inbound message flows through
 one webhook (`POST /webhook`), gets parsed and routed based on the student's
 current conversation state (held in Redis, not the database), and lands in
-one of several feature areas: Q&A (RAG-grounded answers), practice questions
-(past papers, MCQ/structured), mock exams (timed, graded), or a progress
-report. A separate Next.js admin portal manages content and monitors usage —
-see [ADMIN_PORTAL.md](ADMIN_PORTAL.md).
+one of two regimes: the original per-feature **button/state-machine handlers**
+(Q&A, practice questions, mock exams, progress — still fully intact and
+reachable via buttons/commands), or, for free text typed from the main menu,
+the **AI orchestrator** (OpenAI function-calling over the same underlying
+services — see [AI orchestrator](#ai-orchestrator)). A separate Next.js admin
+portal manages content and monitors usage — see [ADMIN_PORTAL.md](ADMIN_PORTAL.md).
 
 ```
 Student (WhatsApp) ──▶ POST /webhook ──▶ SignatureGuard (HMAC-SHA256)
@@ -44,15 +47,23 @@ Student (WhatsApp) ──▶ POST /webhook ──▶ SignatureGuard (HMAC-SHA256
                                     MessageRouterService
                               (new user? /menu? command? free text?)
                                               │
-                    ┌──────────┬─────────────┼─────────────┬──────────┐
-                    ▼          ▼             ▼             ▼          ▼
-              Onboarding   QA Mode    Practice Mode   Mock Exam   Progress
-              Handler      Handler    Handler         Handler     Handler
-                    │          │             │             │          │
-                    └──────────┴──────┬──────┴─────────────┴──────────┘
+        ┌──────────┬─────────────┬───────────┼───────────┬──────────┐
+        ▼          ▼             ▼           ▼           ▼          ▼
+  Onboarding   QA Mode    Practice Mode  Mock Exam   Progress   Orchestrator
+  Handler      Handler    Handler        Handler     Handler    Service
+  (buttons)    (buttons)  (buttons)      (buttons)   (buttons)  (free text
+        │          │             │           │           │      from MAIN_MENU)
+        └──────────┴──────┬──────┴───────────┴───────────┴──────────┘
                                        ▼
                          SessionService (Redis: session:{phone}, 2h TTL)
 ```
+
+The orchestrator is deliberately additive, not a replacement: every button,
+slash command, and their old sub-flows still work exactly as before. Only one
+path changed — typing free text while at the main menu, which used to fall
+through to a generic "I didn't understand" message, now reaches the
+orchestrator instead. See [AI orchestrator](#ai-orchestrator) for why, and
+exactly what is/isn't in scope.
 
 ## Conversation state machine
 
@@ -70,8 +81,8 @@ interface SessionContext {
   currentQuestionText?: string;   // also used by /hint
   examId?: string;
   pendingPaymentId?: string;
-  conversationHistory?: ConversationMessage[];
-  pendingSubjects?: string[];     // onboarding scratch, until "Confirm"
+  conversationHistory?: ConversationMessage[]; // shared by QaService and the orchestrator
+  pendingSubjects?: string[];     // legacy field, unused by the current onboarding flow (see below)
   practice?: PracticeFilterState; // { subject?, topic?, yearRange?, type?, seenIds? }
   questionType?: string;
   markingSchemeChunkId?: string;
@@ -150,21 +161,43 @@ webhook) or an unrecognized interactive subtype — returns `null` or
    states).
 6. `FREE_TEXT` → routed by state: `AWAITING_QUESTION` → `QaModeHandler`;
    `ANSWER_EVALUATION` → `PracticeModeHandler`; `MOCK_EXAM_ACTIVE` →
-   `MockExamHandler`; else → `FreeTextHandler` (sends `errors.unknownCommand`).
+   `MockExamHandler`; **`MAIN_MENU` → `OrchestratorService`** (the one
+   deliberate behavior change of the AI-orchestrator rebuild — see
+   [AI orchestrator](#ai-orchestrator)); every other state → `FreeTextHandler`
+   (sends `errors.unknownCommand`).
 
 **Handlers** (`apps/api/src/handlers/`, plus a few in `whatsapp/handlers/`):
 
 | Handler | Responsibility |
 |---|---|
-| `OnboardingHandler` | New-user flow: upsert user, greet, level buttons → chunked subject list (tap-to-accumulate) → Confirm/Redo → persist, → `MAIN_MENU`. |
+| `OnboardingHandler` | New-user flow: upsert user, greet, level buttons → conversational subject reply (see below) → persist, → `MAIN_MENU`. |
 | `MainMenuHandler` | The 4-row list menu (ask/practice/mock/progress), dispatches taps. |
 | `QaModeHandler` | Subject picker → `AWAITING_QUESTION` → forwards to `QaService`; quota-checks first; handles `/hint` and post-answer nav buttons. |
-| `PracticeModeHandler` | Subject → topic (incl. weighted "Surprise Me") → year range → MCQ/Structured/Any → delivers a question, grades it, records the result, offers next-question nav. |
+| `PracticeModeHandler` | Subject → topic (incl. weighted "Surprise Me") → year range → MCQ/Structured/Any → delivers a question, delegates grading to `PracticeGradingService`, records the result, offers next-question nav. |
 | `MockExamHandler` | Premium-gated entry, assembles a paper, Start/Cancel, schedules timers, delivers questions, handles `/skip`/`/submit`, grades + reports. |
-| `ProgressHandler` | Per-topic accuracy + streak report, flags weak topics (<60%). |
+| `ProgressHandler` | Per-topic accuracy + streak report (delegates the aggregation to `ProgressStatsService`), flags weak topics (<60%). |
 | `CommandHandler` | Dispatches all `/`-prefixed commands. |
 | `MenuHandler` | Catch-all for unrouted button/list replies. |
-| `FreeTextHandler` | Default fallback for free text outside any active flow. |
+| `FreeTextHandler` | Default fallback for free text outside any active flow (and outside the orchestrator's one carved-out case — see [AI orchestrator](#ai-orchestrator)). |
+
+**Onboarding's subject step** (`OnboardingHandler.handleSubjectTextReply`) is
+conversational, not a numbered-list-plus-Confirm-button flow: an exact
+numbers/names reply (`parseSubjectSelections` in `subjects.constants.ts`)
+resolves instantly with no LLM call; anything looser ("doing bio, chem and
+add maths") falls back to `OnboardingSubjectParserService`, a small dedicated
+`generateWithTools` call that maps free text onto the valid subject list for
+the student's level and language. Either way, the first confidently-parsed
+reply commits immediately and moves to `MAIN_MENU` — there's no separate
+confirmation step; fixing a mis-parse afterward is an ordinary conversation
+with the orchestrator's `update_profile` tool, not a second onboarding
+round-trip. `SessionContext.pendingSubjects` is unused by this flow (kept in
+the shared type for backward compatibility, not currently written to).
+
+**`PracticeGradingService`** (`apps/api/src/practice/`) owns MCQ/essay grading
+end to end (marking-scheme lookup, LLM explanations for wrong MCQ answers or
+essay feedback, `Interaction`/topic-score persistence) — extracted out of
+`PracticeModeHandler` so both it and the orchestrator's `grade_answer` tool
+share one grading implementation instead of two that could drift.
 
 **Outbound (`WhatsappSendService`)**: `sendText`, `sendButtons` (hard cap
 `MAX_BUTTONS = 3`, throws if exceeded), `sendList`, `markAsRead` — all POST to
@@ -174,6 +207,103 @@ cap is enforced by *callers*, not the send service itself
 `OnboardingHandler`/`PracticeModeHandler` to chunk longer option lists across
 multiple messages). Retries on `429`/`5xx` via an axios interceptor, up to 3
 attempts with exponential backoff (`2^attempt * 1000ms`).
+
+## AI orchestrator
+
+Built to replace the frustration of the button/menu-tree flow for anyone who
+would rather just type — user testing showed students typing "can I practice
+biology" instead of tapping through Main Menu → Practice → subject → topic →
+year → type, and getting an unhelpful "I didn't understand" in return. The
+orchestrator (`apps/api/src/orchestrator/`) is OpenAI function-calling over
+the exact same underlying services the button flows already use — not a
+parallel implementation of practice/mock-exam/progress logic.
+
+**Scope — deliberately narrow.** Only one router path changed: free text
+typed while `session.state === MAIN_MENU` now reaches `OrchestratorService`
+instead of `FreeTextHandler`. Every button tap, every slash command, and
+every other state's free-text handling (`AWAITING_QUESTION`,
+`ANSWER_EVALUATION`, `MOCK_EXAM_ACTIVE`, mid-onboarding, mid-practice-filter,
+mid-mock-exam-setup) is untouched and dispatches exactly as it did before.
+Onboarding's *level* selection (a 2-button tap) is also untouched — it was
+never the friction being addressed; only onboarding's *subject* step became
+conversational (see above).
+
+**`OrchestratorService.handleMessage`** (`orchestrator.service.ts`) — the
+loop, run once per qualifying inbound message:
+
+1. Sends a WhatsApp "thinking" ack (`markAsRead` + `qa.thinking`) — a
+   tool-using turn can take a couple of real LLM round trips.
+2. `SystemPromptBuilderService.build(phone)` composes the system prompt fresh
+   every turn (never cached — quota/streak/tier can all change between
+   messages).
+3. Replays `session.conversationHistory` (the same field `QaService` uses —
+   see below), appends the new user message, and calls
+   `LlmService.generateWithTools(messages, ORCHESTRATOR_TOOLS, {complexity:
+   'complex'})`.
+4. If the response has no tool calls, its `content` is the final reply. If it
+   does, each call is dispatched through `ToolExecutorService.execute`, and
+   the JSON-stringified result is pushed back as a `role: 'tool'` message for
+   the next round — capped at **5 rounds** (`MAX_TOOL_ROUNDS`) as a safety net
+   against a pathological loop that never produces a final answer.
+5. The final reply is chunked via `ResponseFormatterService` and sent; the
+   turn's `{user, assistant}` pair (the original message and the final reply
+   — not the intermediate tool-call transcript) is appended to
+   `conversationHistory`, capped at the last 10 messages.
+6. Any thrown error (LLM failure, round-cap exhaustion) falls back to
+   `errors.tryAgain` rather than ever propagating a raw failure to the
+   student.
+
+**`SystemPromptBuilderService`** (`system-prompt-builder.service.ts`) builds
+GCEBot's identity, the student's real profile (level, subjects, tier, streak,
+language), an instruction to reply in whichever language the student is
+*actually* writing in (LLM-generated content — QA answers, practice/mock
+feedback — has otherwise been English-only regardless of the student's
+`language` setting), a map of when to use which tool, and a quota heads-up
+that only appears once a FREE-tier student is within 3 questions of the daily
+limit (to avoid noise on every single message).
+
+**Tools** (`tools/tool-definitions.ts`, dispatched by `ToolExecutorService`):
+
+| Tool | Maps to | Server-side gate |
+|---|---|---|
+| `answer_question` | `QaService.answerQuestion(..., { updateHistory: false })` | FREE-tier daily quota (`QuotaService`) |
+| `get_practice_question` | `PastQuestionService.getQuestion` | — (persists the delivered question into session for `grade_answer` to read back) |
+| `grade_answer` | `PracticeGradingService.gradeAnswer` | Reads the *session's* active question, never a model-supplied id — grading always targets whatever was last actually served |
+| `start_mock_exam` | `MockPaperService.assemblePaper` | PREMIUM/FAMILY tier |
+| `show_progress` | `ProgressStatsService.getTopicStats` (+ streak) | — |
+| `update_profile` | `UsersService.updateLevel`/`updateSubjects`/`updateLanguage` | — (only the fields actually provided are updated) |
+| `start_subscription` | *(no real service — payments aren't built, see [Payments](#payments))* | Always returns an honest "not available yet", never fakes success |
+
+The model is instructed to **always call through** rather than guess a
+student's tier or quota from context (e.g. never self-declare "you need to
+upgrade" without calling `start_mock_exam` first) — every gate above lives in
+`ToolExecutorService`, not in the prompt, and a gated result
+(`requiresUpgrade`/`quotaExceeded`) is relayed as an upgrade opportunity, not
+a failure. Every branch of `ToolExecutorService.execute` catches its own
+errors and returns a plain `{ error: string }` instead of throwing — a
+malformed tool call or a stale session must never surface a raw exception
+into the tool-calling loop.
+
+**Known rough edge, not yet resolved:** `start_mock_exam`'s success path
+hands the session over to the *existing* `MockExamHandler` (sets
+`session.state = MOCK_EXAM_SETUP` and populates `session.mockExam`, mirroring
+`MockExamHandler.assembleAndPromptReady` exactly) so the pre-existing
+timed-exam flow can take over. But `MockExamHandler.handleSetupSelection`
+only recognizes a WhatsApp button tap (`MOCK_START_EXAM`/`MOCK_CANCEL_EXAM`
+ids), not free text — if the orchestrator's own composed reply doesn't
+happen to result in the student tapping a real button, their first free-text
+"yes start it" hits the handler's "unrecognized" branch, which harmlessly
+re-sends the real Start/Cancel buttons. Not broken, just one avoidable extra
+round-trip; worth revisiting if it proves annoying in practice.
+
+**`QaService.answerQuestion`'s `updateHistory` option**: `QaService` itself
+persists a `{question, answer}` pair into `session.conversationHistory` as a
+side effect — needed by the older `QaModeHandler` flow, which has no other
+layer managing history. The orchestrator now owns history for its own turns
+(step 5 above), so `ToolExecutorService` calls `answerQuestion` with
+`{ updateHistory: false }` to avoid two conflicting versions of the same
+exchange (the raw RAG answer vs. the orchestrator's own, possibly
+paraphrased, final reply) being written for one turn.
 
 ## RAG (retrieval-augmented generation)
 
@@ -227,7 +357,11 @@ same pipeline — there's no separate ingestion path.
 6. **`LlmService`** — OpenAI, model chosen by complexity:
    `{ simple: 'gpt-4o-mini', complex: 'gpt-4o' }`. QA calls always use
    `complexity: 'complex'`. History trimmed to the last 5 exchanges (10
-   messages). 30s timeout, 3 retries.
+   messages). 30s timeout, 3 retries. `generateWithTools(messages, tools,
+   options)` is a separate method on the same service for OpenAI
+   function-calling (the AI orchestrator's tool-calling loop, and
+   `OnboardingSubjectParserService`'s subject-matching call) — `generate()`
+   itself is unchanged and every existing caller keeps working as before.
 7. **`ResponseFormatterService`** — markdown → WhatsApp formatting, splits
    anything over 4096 chars (budget: 4076 content + 20 reserved for a
    `(N/M)` prefix) paragraph-first, then sentence-first, then hard

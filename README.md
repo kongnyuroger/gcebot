@@ -17,7 +17,7 @@ A WhatsApp AI tutoring system for Cameroonian students preparing for the **GCE O
 | Cache / Session | Redis (`ioredis`) |
 | Admin Portal | Next.js 14 (App Router) + NextAuth.js |
 | File Storage | Cloudflare R2 |
-| Hosting | Railway |
+| Hosting | Render (API), Vercel (admin portal), Neon (Postgres/pgvector), Upstash (Redis) |
 
 ## Monorepo layout
 
@@ -174,6 +174,7 @@ Admin-specific (run with `--workspace=admin`, or `cd apps/admin`):
 ## Architecture notes
 
 - **Conversation state machine.** Every user session is a `SessionContext` (`state` + scratch fields) stored in Redis under `session:{phone}` with a 2-hour TTL. `StateTransitionService` validates state changes against an explicit graph (`VALID_TRANSITIONS`) — most transitions must follow the graph, but a few user-initiated commands (`/menu`, `/settings`) are deliberate escape hatches that reset state directly, since they need to work from *any* state.
+- **AI orchestrator.** Free text typed from the main menu (`session.state === MAIN_MENU`) is handled by `OrchestratorService` — OpenAI function-calling over 7 tools (`apps/api/src/orchestrator/`) built on top of the same services the button flows already use, not a parallel implementation. Every button, slash command, and every other state's free-text handling is untouched; this is the one deliberate replacement for the old "I didn't understand, here's the menu" fallback. See [PROJECT.md's "AI orchestrator" section](PROJECT.md#ai-orchestrator) for the full loop, the tool list, and a known rough edge around handing off into a mock exam.
 - **pgvector.** Raw SQL is used for all vector operations (per the project's coding standard) since Prisma can't read/write the `Unsupported("vector(n)")` column type through its normal query API.
 - **RAG ingestion.** A document goes through a Bull-queued pipeline (`IngestionProcessor`): PDF text extraction → semantic chunking (with overlap) → OpenAI embeddings → storage in `embedding_chunks` (pgvector, ivfflat index), with `Document.ingestionStatus` tracking progress and surfacing the real error on failure.
 - **RAG query engine.** `QaService` orchestrates the whole answer flow per question: determine subject (explicit override → session context → keyword inference → the user's first enrolled subject) → check `ResponseCacheService` (SHA-256 of the normalized question + search filter, 24h TTL, skipped for time-sensitive questions) → `VectorSearchService` (cosine similarity via `<=>`, topK 5, similarity floor 0.3) → `PromptAssemblerService` (assembles a numbered, cited CONTEXT block) → `LlmService` (OpenAI, `gpt-4o-mini`/`gpt-4o` by complexity, last 5 exchanges of history) → `ResponseFormatterService` (markdown → WhatsApp formatting, splits responses over 4096 chars into numbered `(N/M)` parts). Every answer is logged as an `Interaction` and folded into the session's conversation history.
