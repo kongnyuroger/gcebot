@@ -93,6 +93,43 @@ describe('DocumentsController', () => {
         }),
       ).rejects.toThrow(new BadRequestException('year must be an integer'));
     });
+
+    it('forwards a valid paperNumber to IngestionService', async () => {
+      await controller.ingest(pdfFile(), {
+        subject: 'Biology',
+        level: 'O_LEVEL',
+        docType: 'PAST_PAPER',
+        year: '2023',
+        paperNumber: '2',
+      });
+
+      expect(ingestDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ originalname: 'past-paper.pdf' }),
+        expect.objectContaining({ paperNumber: 2 }),
+      );
+    });
+
+    it('rejects a non-integer paperNumber', async () => {
+      await expect(
+        controller.ingest(pdfFile(), {
+          subject: 'Biology',
+          level: 'O_LEVEL',
+          docType: 'PAST_PAPER',
+          paperNumber: 'two',
+        }),
+      ).rejects.toThrow(new BadRequestException('paperNumber must be a positive integer'));
+    });
+
+    it('rejects a non-positive paperNumber', async () => {
+      await expect(
+        controller.ingest(pdfFile(), {
+          subject: 'Biology',
+          level: 'O_LEVEL',
+          docType: 'PAST_PAPER',
+          paperNumber: '0',
+        }),
+      ).rejects.toThrow(new BadRequestException('paperNumber must be a positive integer'));
+    });
   });
 
   // The oversized-file rule is enforced by MaxFileSizeValidator, wired into
