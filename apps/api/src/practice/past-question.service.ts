@@ -37,6 +37,16 @@ interface CandidateChunk {
 // numbered pattern like "3." / "3)" at the very start of the content.
 const QUESTION_START_PATTERN = /^\s*(?:question\s*(\d+)|(\d+)[.)])/i;
 
+// Same marker, but found anywhere in a chunk (not just at the start) and
+// globally. Past papers get one paragraph per question, so a chunk's start
+// reliably marks a question boundary - but MCQ marking schemes are commonly
+// a single compact answer-key table ("1. B 2. D 3. A ..."), which the
+// chunker packs entirely into one chunk that only starts with a title, not a
+// question number. Used only for locating a specific question's entry inside
+// a marking scheme, where "the chunk this text lives in" says nothing about
+// which question boundary it starts on.
+const QUESTION_MARKER_PATTERN = /(?:^|\s)(?:question\s*(\d+)|(\d+)[.)])/gi;
+
 // A question is treated as MCQ if it has at least 2 lettered options
 // (A./A)/B./B)/etc.) on their own line - anything else is Structured/Essay.
 const MCQ_OPTION_PATTERN = /(?:^|\n)\s*[A-D][.)]\s+\S/gm;
@@ -144,11 +154,18 @@ export class PastQuestionService {
       select: { id: true, content: true },
     });
 
-    const match = candidates.find((candidate) => {
-      const m = candidate.content.match(QUESTION_START_PATTERN);
-      return m !== null && (m[1] ?? m[2]) === questionNumber;
-    });
+    const match = candidates.find((candidate) =>
+      this.findQuestionNumbers(candidate.content).has(questionNumber),
+    );
 
     return match?.id;
+  }
+
+  private findQuestionNumbers(content: string): Set<string> {
+    const numbers = new Set<string>();
+    for (const match of content.matchAll(QUESTION_MARKER_PATTERN)) {
+      numbers.add(match[1] ?? match[2]);
+    }
+    return numbers;
   }
 }
