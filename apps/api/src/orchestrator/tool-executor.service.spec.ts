@@ -5,7 +5,6 @@ import { PracticeGradingService } from '../practice/practice-grading.service';
 import { MockPaperService } from '../mock/mock-paper.service';
 import { UsersService } from '../users/users.service';
 import { SessionService } from '../session/session.service';
-import { StateTransitionService } from '../session/state-transition.service';
 import { ProgressStatsService } from '../progress/progress-stats.service';
 import { QuotaService } from '../quota/quota.service';
 import { TOOL_NAMES } from './tools/tool-definitions';
@@ -24,7 +23,6 @@ describe('ToolExecutorService', () => {
   let updateLanguage: jest.Mock;
   let getSession: jest.Mock;
   let updateSessionField: jest.Mock;
-  let transition: jest.Mock;
   let getTopicStats: jest.Mock;
   let checkQuota: jest.Mock;
 
@@ -67,7 +65,6 @@ describe('ToolExecutorService', () => {
     updateLanguage = jest.fn();
     getSession = jest.fn().mockResolvedValue(null);
     updateSessionField = jest.fn();
-    transition = jest.fn();
     getTopicStats = jest.fn().mockResolvedValue([]);
     checkQuota = jest.fn().mockResolvedValue({ allowed: true, used: 0, limit: 10 });
 
@@ -83,7 +80,6 @@ describe('ToolExecutorService', () => {
         updateLanguage,
       } as unknown as UsersService,
       { getSession, updateSessionField } as unknown as SessionService,
-      { transition } as unknown as StateTransitionService,
       { getTopicStats } as unknown as ProgressStatsService,
       { checkQuota } as unknown as QuotaService,
     );
@@ -239,7 +235,11 @@ describe('ToolExecutorService', () => {
         phone,
       );
 
-      expect(transition).toHaveBeenCalledWith(phone, ConversationState.MOCK_EXAM_SETUP);
+      expect(updateSessionField).toHaveBeenCalledWith(
+        phone,
+        'state',
+        ConversationState.MOCK_EXAM_SETUP,
+      );
       expect(updateSessionField).toHaveBeenCalledWith(phone, 'examId', 'exam-1');
       expect(updateSessionField).toHaveBeenCalledWith(
         phone,
