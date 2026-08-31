@@ -37,9 +37,43 @@ interface CandidateChunk {
 // numbered pattern like "3." / "3)" at the very start of the content.
 const QUESTION_START_PATTERN = /^\s*(?:question\s*(\d+)|(\d+)[.)])/i;
 
+// Finds where the NEXT question begins, anywhere in a chunk - short MCQs are
+// dense enough that ChunkingService's 500-800 token target routinely packs
+// 2-3 of them into one chunk. Without trimming to this boundary, "one"
+// served question would actually be several concatenated ones (confirmed
+// live: a chunk containing "...D Last in last out approach. 19. Which of
+// the following..." served as a single practice question).
+//
+// PDF extraction for these documents does not preserve line breaks between
+// questions - everything runs on as one line, so (unlike QUESTION_START_PATTERN,
+// which only ever needs to match at position 0) this can't anchor on a
+// preceding newline. Instead it requires the number to be preceded by
+// terminal punctuation + a space (the end of the previous question's last
+// option, e.g. "...Caches. 10. The fastest...") and followed by a space -
+// this is what actually distinguishes a new question's number from a bare
+// digit inside option text, since every observed option is letter-prefixed
+// (A/B/C/D), never a bare number.
+const NEXT_QUESTION_PATTERN = /[.?!]\s+(?=(?:question\s*\d+\b|\d+[.)])\s)/gi;
+
 // A question is treated as MCQ if it has at least 2 lettered options
-// (A./A)/B./B)/etc.) on their own line - anything else is Structured/Essay.
-const MCQ_OPTION_PATTERN = /(?:^|\n)\s*[A-D][.)]\s+\S/gm;
+// (A./A)/B./B)/etc.) - anything else is Structured/Essay. Matches an option
+// either on its own line (newline-preceded, for content that DOES preserve
+// line breaks) or, like NEXT_QUESTION_PATTERN above, preceded by a
+// colon/period/question-mark + a space (for the flat single-line extraction
+// this ingested content actually has, and where the letter is often not
+// even followed by punctuation - "A MDR. B IR. C PC. D MAR." has no
+// newlines and no ".)" after the letters at all). \b...\b around the letter
+// is required, not optional: without it, a lone capital letter preceded by
+// ". " matches the start of an ordinary word too (". Decoded" would
+// otherwise register "D" as an option). This only needs to catch 2 of the
+// (up to) 4 options to classify correctly - some formatting styles run the
+// first option straight off the question stem with no punctuation at all
+// ("...network A reliability."), which this deliberately does NOT try to
+// catch (a bare preceding space is far too common in ordinary English to
+// use as a boundary) - but B/C/D are reliably punctuation-preceded either
+// way, which alone clears MIN_MCQ_OPTIONS. Verified against real ingested
+// content across every formatting style actually seen.
+const MCQ_OPTION_PATTERN = /(?:^|\n|[:.?]\s)\s*\b[A-D]\b[.)]?\s+\S/gim;
 const MIN_MCQ_OPTIONS = 2;
 
 const PAPER_PATTERN = /paper\s*(\d+)/i;
@@ -83,7 +117,7 @@ export class PastQuestionService {
 
     return {
       chunkId: selected.chunk.id,
-      questionText: selected.chunk.content,
+      questionText: selected.questionText,
       year: selected.chunk.year ?? undefined,
       paper: selected.chunk.paperNumber
         ? `Paper ${selected.chunk.paperNumber}`
@@ -102,7 +136,22 @@ export class PastQuestionService {
     }
 
     const questionNumber = match[1] ?? match[2];
-    return { chunk, questionNumber, type: this.detectQuestionType(chunk.content) };
+    const questionText = this.extractFirstQuestion(chunk.content);
+    return { chunk, questionNumber, questionText, type: this.detectQuestionType(questionText) };
+  }
+
+  // Trims a chunk down to just its first question, cutting at the next
+  // question-start boundary found anywhere in the content (see
+  // NEXT_QUESTION_PATTERN) - or returns the whole (trimmed) chunk unchanged
+  // if it only contains one question to begin with.
+  private extractFirstQuestion(content: string): string {
+    NEXT_QUESTION_PATTERN.lastIndex = 0;
+    const match = NEXT_QUESTION_PATTERN.exec(content);
+    // The match itself is just "<terminal punctuation><whitespace>" (the
+    // next question's number is a lookahead, not consumed) - cut right after
+    // it, so the punctuation stays with the first question and the next
+    // question's number is excluded.
+    return (match ? content.slice(0, match.index + match[0].length) : content).trim();
   }
 
   private detectQuestionType(content: string): QuestionType {
