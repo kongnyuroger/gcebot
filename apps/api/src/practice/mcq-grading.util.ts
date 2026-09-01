@@ -39,6 +39,47 @@ const CORRECT_ANSWER_PATTERNS = [
   /\bans\s*(?:is|:)?\s*\(?([A-D])\)?/i,
 ];
 
+// Mirrors QUESTION_START_PATTERN in past-question.service.ts (kept as its
+// own copy rather than a cross-module import - both are small, single-use
+// regexes serving different purposes in their own file). Used to recover a
+// question's number from its own text at grading time, since
+// SessionContext only carries the question's text, not its number.
+const QUESTION_NUMBER_PATTERN = /^\s*(?:question\s*(\d+)|(\d+)[.)])/i;
+
+// Some marking schemes are ingested as a single compact answer-key table -
+// "1. B 11. D 21. A ... 50. C" - rather than one scheme entry per question
+// with prose like "Correct answer: B" (confirmed live: a real ingested GCE
+// Computer Science marking scheme is exactly this shape). Neither
+// CORRECT_ANSWER_PATTERNS above nor QUESTION_START_PATTERN-style per-chunk
+// matching can ever find anything in this format, since it isn't
+// question-specific prose and doesn't start with the target question's own
+// number. This scans the whole chunk for every "N. <letter>" entry and
+// looks up one specific question's letter within it.
+const ANSWER_KEY_ENTRY_PATTERN = /\b(\d{1,3})\.\s*([A-D])\b/g;
+
+export function extractQuestionNumber(questionText: string): string | null {
+  const match = questionText.match(QUESTION_NUMBER_PATTERN);
+  return match ? (match[1] ?? match[2]) : null;
+}
+
+// Exported separately (not folded silently into extractCorrectAnswerLetter)
+// so callers that only need "does this chunk have an answer-key entry for
+// question N at all" - PastQuestionService.findMarkingSchemeChunkId, which
+// is choosing WHICH chunk to associate, not yet extracting a letter from it -
+// don't have to care about the prose-pattern path too.
+export function extractAnswerKeyLetter(
+  schemeContent: string,
+  questionNumber: string,
+): string | null {
+  ANSWER_KEY_ENTRY_PATTERN.lastIndex = 0;
+  for (const match of schemeContent.matchAll(ANSWER_KEY_ENTRY_PATTERN)) {
+    if (match[1] === questionNumber) {
+      return match[2];
+    }
+  }
+  return null;
+}
+
 export function parseOptions(questionText: string): Record<string, string> {
   const options: Record<string, string> = {};
   for (const match of questionText.matchAll(OPTION_LINE_PATTERN)) {
@@ -71,17 +112,40 @@ export function normalizeStudentAnswer(
   return null;
 }
 
-export function extractCorrectAnswerLetter(schemeContent: string): string | null {
+// questionNumber is optional so existing prose-scheme callers/tests that
+// never pass it keep working unchanged - it's only consulted as a fallback
+// for the answer-key-table format, which needs to know WHICH entry to read.
+export function extractCorrectAnswerLetter(
+  schemeContent: string,
+  questionNumber?: string,
+): string | null {
   for (const pattern of CORRECT_ANSWER_PATTERNS) {
     const match = schemeContent.match(pattern);
     if (match) {
       return match[1].toUpperCase();
     }
   }
-  return null;
+  return questionNumber ? extractAnswerKeyLetter(schemeContent, questionNumber) : null;
+}
+
+// A real per-question scheme chunk has at most one or two incidental
+// "N. <letter>"-shaped substrings; an answer-key table has dozens (one per
+// question in the paper). Used to recognize when there is no real prose to
+// show as an "explanation" at all - without this, a correct-answer message
+// for a table-format scheme would show the ENTIRE raw table (confirmed
+// live: "✅ Correct! GCE A/L 0795 COMPUTER SCIENCE 2018 PAPER 1 ANSWER
+// GUIDE 1. B 11. D 21. A ...") instead of a clean message.
+const ANSWER_KEY_TABLE_MIN_ENTRIES = 5;
+
+function looksLikeAnswerKeyTable(content: string): boolean {
+  const entries = content.match(ANSWER_KEY_ENTRY_PATTERN) ?? [];
+  return entries.length >= ANSWER_KEY_TABLE_MIN_ENTRIES;
 }
 
 export function extractSchemeExplanation(schemeContent: string): string {
+  if (looksLikeAnswerKeyTable(schemeContent)) {
+    return 'See the marking scheme for details.';
+  }
   const stripped = schemeContent.replace(QUESTION_PREFIX_PATTERN, '').trim();
   return stripped.length > 0 ? stripped : 'See the marking scheme for details.';
 }

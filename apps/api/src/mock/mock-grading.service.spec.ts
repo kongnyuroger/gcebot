@@ -97,6 +97,29 @@ describe('MockGradingService', () => {
     expect(result?.topicBreakdown['Algebra']).toEqual({ scored: 0, possible: 1 });
   });
 
+  it('grades an MCQ correctly against a compact answer-key-table marking scheme', async () => {
+    // Confirmed live: a real ingested marking scheme is one table for the
+    // whole paper ("1. B 9. D 21. A ...") rather than prose per question.
+    getSession.mockResolvedValue(
+      session({
+        mockExam: {
+          questions: [
+            mcqQuestion({
+              questionText: '9. Decoded instruction is stored in: A MDR. B IR. C PC. D MAR.',
+              questionNumber: '9',
+            }),
+          ],
+          answers: ['D'],
+        },
+      }),
+    );
+    findUniqueChunk.mockResolvedValue({ content: 'ANSWER GUIDE 1. B 9. D 21. A' });
+
+    const result = await service.gradeExam(phone, examId);
+
+    expect(result?.score).toBe(1);
+  });
+
   it('awards zero marks for an MCQ when no marking scheme correct answer can be found', async () => {
     getSession.mockResolvedValue(
       session({ mockExam: { questions: [mcqQuestion()], answers: ['B'] } }),
