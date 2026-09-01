@@ -460,17 +460,26 @@ things aren't as simple as they look:
 ingested as a single compact answer-key table for the whole paper -
 `"1. B 11. D 21. A ... 50. C"` - rather than prose like `"Correct answer:
 B"` per question (confirmed live against a real ingested GCE Computer
-Science marking scheme). Neither `findMarkingSchemeChunkId` (which normally
-needs the marking-scheme chunk to itself start with the target question's
-number) nor `extractCorrectAnswerLetter` (which normally looks for
-`"Correct/Ans(wer) is/: X"` phrasing) can recognize that shape on their own,
-so both fall back to `mcq-grading.util.ts`'s `extractAnswerKeyLetter`, which
-scans a chunk for `"N. <letter>"` entries and looks up one specific
-question. The question's own number is recovered from its text via
-`extractQuestionNumber` where it isn't already on hand (`MockGradingService`
-already has `questionNumber` on its `MockExamQuestion`, so needs no extra
-derivation). `extractSchemeExplanation` also recognizes this table shape
-(5+ `"N. <letter>"` matches) and falls back to a generic message instead of
+Science marking scheme). Two separate problems, two separate fixes:
+- **Finding the right chunk**: `findMarkingSchemeChunkId` originally needed
+  a marking-scheme chunk to itself *start* with the target question's
+  number - a table's chunk starts with the document's title instead. It now
+  scans a chunk's *entire* content for any `"N."`/`"N)"`/`"Question N"`
+  marker (`findQuestionNumbers`/`QUESTION_MARKER_PATTERN`, matching
+  globally with a leading-boundary check so `"19."` can't spuriously match
+  a search for `"9"`) - general enough to cover both a table's every entry
+  and prose phrased differently, not just the table case.
+- **Extracting the letter once the chunk is found**: `extractCorrectAnswerLetter`
+  (in `mcq-grading.util.ts`) still only recognizes `"Correct/Ans(wer)
+  is/: X"` prose by default - a table has no such phrasing anywhere. It
+  falls back to `extractAnswerKeyLetter`, which scans specifically for
+  `"N. <letter>"` entries and looks up one question, given that question's
+  own number (recovered from the question's text via `extractQuestionNumber`
+  where it isn't already on hand - `MockGradingService` already has
+  `questionNumber` on its `MockExamQuestion`, so needs no extra derivation).
+
+`extractSchemeExplanation` also recognizes this table shape (5+
+`"N. <letter>"` matches) and falls back to a generic message instead of
 showing the entire raw table as a correct answer's "explanation."
 
 **Topic selection**: `TopicWeaknessService` aggregates graded `Interaction`
