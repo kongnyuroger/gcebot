@@ -65,7 +65,7 @@ describe('OrchestratorService', () => {
     expect(sendText).not.toHaveBeenCalled();
   });
 
-  it('sends a thinking ack, then the final reply, when the model answers with no tool calls', async () => {
+  it('marks the message read with a typing indicator, then sends the final reply, when the model answers with no tool calls', async () => {
     generateWithTools.mockResolvedValue({
       message: assistantMessage('Osmosis is the movement of water...'),
       toolCalls: [],
@@ -73,8 +73,8 @@ describe('OrchestratorService', () => {
 
     await service.handleMessage(buildMessage('What is osmosis?'));
 
-    expect(markAsRead).toHaveBeenCalledWith('m1');
-    expect(sendText).toHaveBeenNthCalledWith(1, phone, expect.stringMatching(/thinking/i));
+    expect(markAsRead).toHaveBeenCalledWith('m1', true);
+    expect(sendText).toHaveBeenCalledTimes(1);
     expect(sendText).toHaveBeenLastCalledWith(phone, 'Osmosis is the movement of water...');
     expect(execute).not.toHaveBeenCalled();
   });
@@ -136,13 +136,13 @@ describe('OrchestratorService', () => {
     expect(sendText).toHaveBeenLastCalledWith(phone, 'A variable stores a value.');
   });
 
-  it("sends the thinking ack and any fallback text in the student's own language (French)", async () => {
+  it('sends the fallback error text in the student\'s own language (French)', async () => {
     getUserProfile.mockResolvedValue({ language: 'FR' });
     generateWithTools.mockRejectedValue(new Error('OpenAI is down'));
 
     await service.handleMessage(buildMessage('bonjour'));
 
-    expect(sendText).toHaveBeenNthCalledWith(1, phone, expect.stringMatching(/réfléchis/i));
+    expect(sendText).toHaveBeenCalledTimes(1);
     expect(sendText).toHaveBeenLastCalledWith(phone, expect.stringMatching(/erreur/i));
   });
 

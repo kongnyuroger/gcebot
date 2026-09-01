@@ -52,8 +52,7 @@ export class OrchestratorService {
     const user = await this.usersService.getUserProfile(phone);
     const lang = user?.language ?? Language.EN;
 
-    await this.whatsappSendService.markAsRead(message.messageId);
-    await this.whatsappSendService.sendText(phone, this.i18n.t('qa.thinking', lang));
+    await this.whatsappSendService.markAsRead(message.messageId, true);
 
     let replyText: string;
     try {

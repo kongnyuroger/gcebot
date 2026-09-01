@@ -124,4 +124,15 @@ describe('WhatsappSendService', () => {
       message_id: 'wamid.INBOUND123',
     });
   });
+
+  it('markAsRead includes a typing indicator when requested', async () => {
+    await service.markAsRead('wamid.INBOUND123', true);
+
+    expect(mockPost).toHaveBeenCalledWith('', {
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: 'wamid.INBOUND123',
+      typing_indicator: { type: 'text' },
+    });
+  });
 });
