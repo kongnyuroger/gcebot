@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DocType, Level } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import { extractAnswerKeyLetter } from './mcq-grading.util';
 
 export type QuestionType = 'MCQ' | 'STRUCTURED';
 
@@ -195,7 +196,14 @@ export class PastQuestionService {
 
     const match = candidates.find((candidate) => {
       const m = candidate.content.match(QUESTION_START_PATTERN);
-      return m !== null && (m[1] ?? m[2]) === questionNumber;
+      if (m !== null && (m[1] ?? m[2]) === questionNumber) {
+        return true;
+      }
+      // Some marking schemes are one compact "1. B 11. D 21. A ..." answer-key
+      // table per document rather than one scheme chunk per question, so the
+      // chunk never itself starts with this specific question's number - see
+      // extractAnswerKeyLetter's own comment for why (confirmed live).
+      return extractAnswerKeyLetter(candidate.content, questionNumber) !== null;
     });
 
     return match?.id;

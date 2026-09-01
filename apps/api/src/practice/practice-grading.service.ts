@@ -10,6 +10,7 @@ import {
   normalizeStudentAnswer,
   extractCorrectAnswerLetter,
   extractSchemeExplanation,
+  extractQuestionNumber,
 } from './mcq-grading.util';
 
 export interface GradeAnswerInput {
@@ -107,7 +108,12 @@ export class PracticeGradingService {
     const schemeChunk = markingSchemeChunkId
       ? await this.prisma.embeddingChunk.findUnique({ where: { id: markingSchemeChunkId } })
       : null;
-    const correctLetter = schemeChunk ? extractCorrectAnswerLetter(schemeChunk.content) : null;
+    const correctLetter = schemeChunk
+      ? extractCorrectAnswerLetter(
+          schemeChunk.content,
+          extractQuestionNumber(questionText) ?? undefined,
+        )
+      : null;
 
     if (!correctLetter) {
       this.logger.warn(

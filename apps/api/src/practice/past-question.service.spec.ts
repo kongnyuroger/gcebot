@@ -223,5 +223,32 @@ describe('PastQuestionService', () => {
 
       expect(result?.markingSchemeChunkId).toBe('p1-marking-scheme');
     });
+
+    it('matches a compact answer-key-table marking scheme, even though it never starts with the question number itself', async () => {
+      // Confirmed live: a real ingested marking scheme is one table for the
+      // whole paper ("1. B 11. D 21. A ...") rather than one scheme entry
+      // per question - QUESTION_START_PATTERN alone never matches this, so
+      // findMarkingSchemeChunkId needs the extractAnswerKeyLetter fallback.
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'q9-chunk',
+            content: '9. Decoded instruction is stored in: A MDR. B IR. C PC. D MAR.',
+            year: 2018,
+            topic: null,
+            paperNumber: 1,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'answer-key-table',
+            content: 'ANSWER GUIDE 1. B 9. D 21. A',
+          },
+        ]);
+
+      const result = await service.getQuestion(baseFilter, []);
+
+      expect(result?.markingSchemeChunkId).toBe('answer-key-table');
+    });
   });
 });

@@ -115,7 +115,9 @@ export class MockGradingService {
           where: { id: question.markingSchemeChunkId },
         })
       : null;
-    const correctLetter = schemeChunk ? extractCorrectAnswerLetter(schemeChunk.content) : null;
+    const correctLetter = schemeChunk
+      ? extractCorrectAnswerLetter(schemeChunk.content, question.questionNumber)
+      : null;
 
     if (!correctLetter) {
       this.logger.warn(
