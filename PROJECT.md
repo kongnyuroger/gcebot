@@ -159,12 +159,22 @@ webhook) or an unrecognized interactive subtype — returns `null` or
 5. `MENU_SELECTION` → a big switch on `session.state` dispatching to the
    state-appropriate handler (falls back to `MenuHandler` for unmapped
    states).
-6. `FREE_TEXT` → routed by state: `AWAITING_QUESTION` → `QaModeHandler`;
-   `ANSWER_EVALUATION` → `PracticeModeHandler`; `MOCK_EXAM_ACTIVE` →
-   `MockExamHandler`; **`MAIN_MENU` → `OrchestratorService`** (the one
-   deliberate behavior change of the AI-orchestrator rebuild — see
-   [AI orchestrator](#ai-orchestrator)); every other state → `FreeTextHandler`
-   (sends `errors.unknownCommand`).
+6. `FREE_TEXT` → routed by state: `SUBJECT_SELECTION` → `OnboardingHandler`;
+   `AWAITING_QUESTION` → `QaModeHandler`; `ANSWER_EVALUATION` →
+   `PracticeModeHandler`; `MOCK_EXAM_ACTIVE` → `MockExamHandler`; **every
+   other case — `MAIN_MENU`, any other mid-flow state left stranded with no
+   free-text handler of its own (`QA_MODE` before a subject is picked,
+   `PRACTICE_FILTER`/`PRACTICE_TOPIC`/`PRACTICE_YEAR`/`PRACTICE_TYPE`,
+   `MOCK_EXAM_SETUP`, `MOCK_EXAM_REPORT`, `SUBSCRIBE`,
+   `PAYMENT_INIT`/`PAYMENT_PENDING`), or a stale/expired session (session is
+   `null` but the user is real, not new) — reaches `OrchestratorService`**
+   (see [AI orchestrator](#ai-orchestrator)). The four states listed first
+   are the only ones kept on their own deterministic handler: a bare reply
+   like "B" carries no context of its own for an LLM to infer intent from -
+   the *state* is what says "this is an answer to grade," not the text.
+   `FreeTextHandler` (sends `errors.unknownCommand`) is no longer called by
+   this router at all - still registered/reachable in principle, but with no
+   remaining call site here.
 
 **Handlers** (`apps/api/src/handlers/`, plus a few in `whatsapp/handlers/`):
 
@@ -218,15 +228,28 @@ orchestrator (`apps/api/src/orchestrator/`) is OpenAI function-calling over
 the exact same underlying services the button flows already use — not a
 parallel implementation of practice/mock-exam/progress logic.
 
-**Scope — deliberately narrow.** Only one router path changed: free text
-typed while `session.state === MAIN_MENU` now reaches `OrchestratorService`
-instead of `FreeTextHandler`. Every button tap, every slash command, and
-every other state's free-text handling (`AWAITING_QUESTION`,
-`ANSWER_EVALUATION`, `MOCK_EXAM_ACTIVE`, mid-onboarding, mid-practice-filter,
-mid-mock-exam-setup) is untouched and dispatches exactly as it did before.
-Onboarding's *level* selection (a 2-button tap) is also untouched — it was
-never the friction being addressed; only onboarding's *subject* step became
-conversational (see above).
+**Scope.** Started narrower (only `MAIN_MENU` free text), then widened after
+live testing kept showing the old generic "I didn't understand" fallback: a
+stale/expired session or one left stranded mid an old button flow both
+dead-ended there regardless of what the student actually typed. Free text now
+reaches `OrchestratorService` from every state *except* `SUBJECT_SELECTION`
+(needs `OnboardingHandler`'s own conversational subject parser),
+`AWAITING_QUESTION`/`ANSWER_EVALUATION` (a bare reply like "B" has no context
+of its own for an LLM to infer intent from — the *state* is what says "this
+is an answer to grade," not the text), and `MOCK_EXAM_ACTIVE` (a real-time
+timed exam with its own answer-recording/index-advancing logic). Every
+button tap and every slash command is untouched and dispatches exactly as
+before. Onboarding's *level* selection (a 2-button tap) is also untouched —
+it was never the friction being addressed; only onboarding's *subject* step
+became conversational (see above).
+
+Since the orchestrator is reachable from states other than `MAIN_MENU` now,
+`ToolExecutorService`'s `start_mock_exam` writes `session.state` directly
+rather than going through `StateTransitionService.transition()` -
+`VALID_TRANSITIONS` only has a `MAIN_MENU → MOCK_EXAM_SETUP` edge, and a
+strict transition would throw if the student's session was actually
+somewhere else. Same escape-hatch pattern `/menu` and `/settings` already
+use for the same reason.
 
 **`OrchestratorService.handleMessage`** (`orchestrator.service.ts`) — the
 loop, run once per qualifying inbound message:
@@ -283,6 +306,18 @@ a failure. Every branch of `ToolExecutorService.execute` catches its own
 errors and returns a plain `{ error: string }` instead of throwing — a
 malformed tool call or a stale session must never surface a raw exception
 into the tool-calling loop.
+
+`answer_question` vs. `get_practice_question` needed explicit disambiguation
+after live testing showed the model sometimes calling `answer_question` for
+practice-shaped requests it should have routed to `get_practice_question` -
+e.g. "do you have any csc questions available?" - relaying the raw retrieved
+chunk verbatim (which, since a chunk can hold multiple short questions back
+to back, looked like the bot dumping several questions at once instead of
+serving one to attempt). Both tool descriptions and the system prompt's "how
+to help" section now explicitly route indirect/loosely-worded practice
+requests to `get_practice_question` and say to prefer it whenever a message
+could reasonably mean either "explain something" or "give me something to
+attempt."
 
 **Known rough edge, not yet resolved:** `start_mock_exam`'s success path
 hands the session over to the *existing* `MockExamHandler` (sets
@@ -395,6 +430,48 @@ question (`QUESTION_START_PATTERN`), classifies MCQ vs. structured by option
 patterns (`MIN_MCQ_OPTIONS = 2` lettered options), and picks **uniformly at
 random** from the candidate pool — then looks up the matching
 `MARKING_SCHEME`-type chunk by subject/year/question-number.
+
+**PDF extraction reality, and why several patterns exist in pairs.** Real
+ingested past papers extract with no line breaks between questions at all -
+everything runs on as one flat line - and `ChunkingService`'s 500-800 token
+target routinely packs 2-3 short MCQs into a single chunk. This was confirmed
+live (a chunk containing "...D Last in last out approach. 19. Which of the
+following..." was originally served as one "question") and is why several
+things aren't as simple as they look:
+- `getQuestion` doesn't return a chunk's content verbatim - it trims to just
+  the *first* question, cutting at the next question's boundary
+  (`NEXT_QUESTION_PATTERN`: terminal punctuation + a space + the next
+  number, since there's no newline to anchor on).
+- `MCQ_OPTION_PATTERN` (question-type detection, in this file) and
+  `OPTION_LINE_PATTERN` (actual answer parsing, in `mcq-grading.util.ts`)
+  both accept an option preceded by a colon/period/question-mark + a space,
+  not only a newline - real options are often "A MDR. B IR." with no
+  punctuation after the letter at all. Both require a `\b` word boundary
+  around the letter, since without it a capital letter starting an ordinary
+  word right after a sentence (". Decoded") would otherwise be mistaken for
+  an option marker. Neither pattern tries to catch a first option separated
+  from the question stem by nothing but a bare space (e.g. "...network A
+  reliability.") - too common in ordinary English to use safely - but
+  option B onward are reliably punctuation-preceded either way, which alone
+  is enough to classify correctly and to grade a full-text (not just
+  bare-letter) answer.
+
+**Marking schemes aren't always one entry per question either.** Some are
+ingested as a single compact answer-key table for the whole paper -
+`"1. B 11. D 21. A ... 50. C"` - rather than prose like `"Correct answer:
+B"` per question (confirmed live against a real ingested GCE Computer
+Science marking scheme). Neither `findMarkingSchemeChunkId` (which normally
+needs the marking-scheme chunk to itself start with the target question's
+number) nor `extractCorrectAnswerLetter` (which normally looks for
+`"Correct/Ans(wer) is/: X"` phrasing) can recognize that shape on their own,
+so both fall back to `mcq-grading.util.ts`'s `extractAnswerKeyLetter`, which
+scans a chunk for `"N. <letter>"` entries and looks up one specific
+question. The question's own number is recovered from its text via
+`extractQuestionNumber` where it isn't already on hand (`MockGradingService`
+already has `questionNumber` on its `MockExamQuestion`, so needs no extra
+derivation). `extractSchemeExplanation` also recognizes this table shape
+(5+ `"N. <letter>"` matches) and falls back to a generic message instead of
+showing the entire raw table as a correct answer's "explanation."
 
 **Topic selection**: `TopicWeaknessService` aggregates graded `Interaction`
 rows by topic into an accuracy ranking; `pickWeightedRandomTopic` weights
