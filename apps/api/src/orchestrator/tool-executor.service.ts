@@ -7,7 +7,6 @@ import { PracticeGradingService } from '../practice/practice-grading.service';
 import { MockPaperService } from '../mock/mock-paper.service';
 import { UsersService } from '../users/users.service';
 import { SessionService } from '../session/session.service';
-import { StateTransitionService } from '../session/state-transition.service';
 import { ProgressStatsService, WEAK_ACCURACY_THRESHOLD } from '../progress/progress-stats.service';
 import { QuotaService } from '../quota/quota.service';
 import { TOOL_NAMES, ToolName } from './tools/tool-definitions';
@@ -36,7 +35,6 @@ export class ToolExecutorService {
     private readonly mockPaperService: MockPaperService,
     private readonly usersService: UsersService,
     private readonly sessionService: SessionService,
-    private readonly stateTransitionService: StateTransitionService,
     private readonly progressStatsService: ProgressStatsService,
     private readonly quotaService: QuotaService,
   ) {}
@@ -235,12 +233,20 @@ export class ToolExecutorService {
     // Mirrors MockExamHandler.assembleAndPromptReady's session shape exactly,
     // so the existing MOCK_EXAM_SETUP flow (Start/Cancel buttons, timers,
     // grading, report) can take over once the router hands control back to
-    // it (step 7). NOTE (flagged for step 7, not resolved here): that
-    // handler recognizes Start/Cancel only via WhatsApp button-tap ids
-    // (MOCK_START_EXAM/MOCK_CANCEL_EXAM), not free text - how the
-    // orchestrator's own reply prompts for that tap is a router/handoff
-    // decision, not a tool-executor one.
-    await this.stateTransitionService.transition(phone, ConversationState.MOCK_EXAM_SETUP);
+    // it (step 7). NOTE: that handler recognizes Start/Cancel only via
+    // WhatsApp button-tap ids (MOCK_START_EXAM/MOCK_CANCEL_EXAM), not free
+    // text - how the orchestrator's own reply prompts for that tap is a
+    // router/handoff design question, not something resolved here.
+    //
+    // Writes session.state directly rather than going through
+    // StateTransitionService.transition() - the orchestrator (unlike the old
+    // button flow) is reachable from ANY state, not just MAIN_MENU, and
+    // VALID_TRANSITIONS only has a MAIN_MENU -> MOCK_EXAM_SETUP edge. This is
+    // the same deliberate escape-hatch pattern already used by /menu and
+    // /settings for the same reason: entering mock-exam setup here needs to
+    // work regardless of whatever state the student's session was actually
+    // in.
+    await this.sessionService.updateSessionField(phone, 'state', ConversationState.MOCK_EXAM_SETUP);
     await this.sessionService.updateSessionField(phone, 'examId', paper.examId);
     await this.sessionService.updateSessionField(phone, 'mockExam', {
       subject,

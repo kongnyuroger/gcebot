@@ -103,10 +103,56 @@ describe('PastQuestionService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('trims questionText to just the first question when a chunk packs several MCQs together', async () => {
+      // PDF extraction for these documents does not preserve line breaks
+      // between questions - real ingested content runs on as one flat line
+      // like this, options letter-prefixed (A/B/C/D), questions separated
+      // only by the previous question's terminal punctuation + a space.
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'multi-question-chunk',
+            content:
+              '9. Decoded instruction is stored in: A MDR. B IR. C PC. D MAR. ' +
+              '10. The fastest data access is provided using: A DRAM. B SRAM. C Registers. D Caches. ' +
+              '11. HTTP is a(n) protocol. A Application. B Transport. C Network. D Session.',
+            year: 2021,
+            topic: null,
+            paperNumber: 1,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.getQuestion(baseFilter, []);
+
+      expect(result?.questionText).toBe(
+        '9. Decoded instruction is stored in: A MDR. B IR. C PC. D MAR.',
+      );
+      expect(result?.questionText).not.toContain('10.');
+      expect(result?.questionText).not.toContain('11.');
+    });
+
+    it('leaves a single-question chunk unchanged (aside from trimming whitespace)', async () => {
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'single-question-chunk',
+            content: '  Question 1. Explain photosynthesis in plants.  ',
+            year: 2022,
+            topic: 'Photosynthesis',
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.getQuestion(baseFilter, []);
+
+      expect(result?.questionText).toBe('Question 1. Explain photosynthesis in plants.');
+    });
   });
 
   describe('marking scheme paper matching', () => {
-    it('filters the marking-scheme query by the selected question\'s paperNumber', async () => {
+    it("filters the marking-scheme query by the selected question's paperNumber", async () => {
       findMany
         .mockResolvedValueOnce([
           {

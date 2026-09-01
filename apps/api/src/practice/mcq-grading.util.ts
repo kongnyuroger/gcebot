@@ -9,8 +9,23 @@
 export const QUESTION_PREFIX_PATTERN =
   /^\s*(?:question\s*\d+|\d+[.)])\s*\.?\s*(?:paper\s*\d+\.?\s*)?/i;
 
-// Matches option lines like "A. x=5" or "B) 10" at the start of a line.
-const OPTION_LINE_PATTERN = /(?:^|\n)\s*([A-D])[.)]\s*([^\n]+)/g;
+// Matches an option like "A. x=5" or "B) 10" on its own line (content that
+// preserves line breaks), or, for the flat single-line PDF extraction real
+// ingested past papers actually have ("A MDR. B IR. C PC. D MAR." - no
+// newlines, and often no ".)" after the letter at all), preceded by a
+// colon/period/question-mark + a space. \b around the letter is required:
+// without it, a lone capital letter right after ". " also matches the start
+// of an ordinary word (". Decoded" would otherwise register a "D" option
+// and swallow the real ones). The lookahead cuts each option's captured
+// text off at the next option boundary (or end of string/newline) rather
+// than running to end-of-line, since flat text has no line to stop at.
+// Deliberately does not try to catch a first option separated from the stem
+// by nothing but a bare space (e.g. "...network A reliability.") - that
+// boundary is far too common in ordinary English to use safely - but B/C/D
+// are reliably punctuation-preceded either way. Verified against real
+// ingested content across every formatting style actually seen.
+const OPTION_LINE_PATTERN =
+  /(?:^|\n|[:.?]\s)\s*\b([A-D])\b[.)]?\s*([^\n]+?)(?=\s*[.?!]\s+\b[A-D]\b[.)]?\s|\s*$|\n)/g;
 
 // A bare letter answer, optionally wrapped in punctuation: "A", "a)", "(A)", "A.".
 const BARE_LETTER_PATTERN = /^\(?([A-D])\)?\.?$/i;

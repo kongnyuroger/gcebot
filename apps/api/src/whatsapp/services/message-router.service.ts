@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConversationState } from '@gcebot/shared';
 import { CommandHandler } from '../handlers/command.handler';
 import { MenuHandler } from '../handlers/menu.handler';
-import { FreeTextHandler } from '../handlers/free-text.handler';
 import { ParsedMessage } from './message-parser.service';
 import { UsersService } from '../../users/users.service';
 import { SessionService } from '../../session/session.service';
@@ -28,7 +27,6 @@ export class MessageRouterService {
   constructor(
     private readonly commandHandler: CommandHandler,
     private readonly menuHandler: MenuHandler,
-    private readonly freeTextHandler: FreeTextHandler,
     private readonly usersService: UsersService,
     private readonly sessionService: SessionService,
     private readonly onboardingHandler: OnboardingHandler,
@@ -77,6 +75,13 @@ export class MessageRouterService {
     if (session?.state === ConversationState.SUBJECT_SELECTION) {
       return this.onboardingHandler.handleSubjectTextReply(message);
     }
+    // Kept on their own deterministic handlers rather than the orchestrator:
+    // a bare reply here ("B", a one-line answer) carries no context of its
+    // own for an LLM to infer intent from - the STATE is what says "this is
+    // an answer to grade/a question to route", not the message text. Every
+    // other state below has no such ambiguity (either there's nothing
+    // state-specific to interpret, or the orchestrator's tools already read
+    // the same session fields these old flows do).
     if (session?.state === ConversationState.AWAITING_QUESTION) {
       return this.qaModeHandler.handleQuestion(message);
     }
@@ -87,18 +92,16 @@ export class MessageRouterService {
       return this.mockExamHandler.handleAnswer(message);
     }
 
-    // The one deliberate behavior change of this branch: typing free text
-    // from MAIN_MENU used to fall through to FreeTextHandler's generic "I
-    // didn't understand, here's the menu" reply - the exact "typing instead
-    // of tapping doesn't work" friction the orchestrator rebuild exists to
-    // fix. Every other state/intent in this router (commands, button/list
-    // taps, the other free-text states above) is untouched - those flows
-    // still work exactly as before if the student prefers using buttons.
-    if (session?.state === ConversationState.MAIN_MENU) {
-      return this.orchestratorService.handleMessage(message);
-    }
-
-    return this.freeTextHandler.handle(message);
+    // Everything else reaches the orchestrator: MAIN_MENU (the original,
+    // narrower scope of this change), a stale/expired session (2h Redis
+    // TTL - session is null but the user is real, not new), or any other
+    // state the old button flow left the student stranded in mid-flow with
+    // no free-text handler of its own (QA_MODE before picking a subject,
+    // PRACTICE_FILTER/TOPIC/YEAR/TYPE, MOCK_EXAM_SETUP, etc.). All of these
+    // used to dead-end at FreeTextHandler's generic "I didn't understand"
+    // message regardless of what the student actually typed - the exact
+    // behavior real testing showed was still happening too often.
+    return this.orchestratorService.handleMessage(message);
   }
 
   private async routeMenuSelection(message: ParsedMessage): Promise<void> {

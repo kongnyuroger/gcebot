@@ -37,10 +37,15 @@ export const ORCHESTRATOR_TOOLS: LLMTool[] = [
       name: TOOL_NAMES.ANSWER_QUESTION,
       description:
         "Explain a concept or answer a factual/academic question using the student's course " +
-        'material (grounded in their textbooks, syllabuses, and past papers). Use this for ' +
-        'explanatory or informational questions - "what is...", "explain...", "why does...", ' +
-        '"how do I...". This is NOT for serving a practice question to attempt (use ' +
-        'get_practice_question for that) and NOT for grading an answer the student already gave ' +
+        'material (grounded in their textbooks, syllabuses, and past papers). Use this ONLY for ' +
+        'genuinely explanatory questions - "what is...", "explain...", "why does...", "how do ' +
+        'I...". Do NOT use this if the student is asking to be GIVEN a question to attempt, ' +
+        'practice, or test themselves with - that includes indirect or loosely-worded requests ' +
+        'like "do you have any questions available?", "any past papers for [year]?", or "let me ' +
+        'answer a [year] question" - all of those mean the student wants a real question served, ' +
+        "which is get_practice_question's job, not this one. If a message could reasonably mean " +
+        'either "explain something to me" or "give me something to attempt", prefer ' +
+        'get_practice_question. Also never use this to grade an answer the student already gave ' +
         '(use grade_answer for that).',
       parameters: {
         type: 'object',
@@ -66,9 +71,13 @@ export const ORCHESTRATOR_TOOLS: LLMTool[] = [
     function: {
       name: TOOL_NAMES.GET_PRACTICE_QUESTION,
       description:
-        'Serve one real, past GCE exam question for the student to attempt. Use this when the ' +
-        'student asks to practice, wants a question to try, or wants to test themselves - not ' +
-        'for explaining a concept.',
+        'Serve exactly ONE real, past GCE exam question for the student to attempt next. Use ' +
+        'this whenever the student wants to practice, be tested, or be given a question - ' +
+        'including indirect or loosely-worded requests like "do you have any [subject] questions ' +
+        'available?", "any past papers for [year]?", "let me answer a [year] question", or "give ' +
+        'me something to solve". Never invent, paraphrase, list multiple questions, or answer ' +
+        'from your own knowledge of what past papers usually contain - always call this tool, ' +
+        'which returns exactly one real question from the ingested past papers.',
       parameters: {
         type: 'object',
         properties: {
