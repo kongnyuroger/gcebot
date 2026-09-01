@@ -29,7 +29,6 @@
     "selectSubjectSectionTitle": "Your subjects",
     "noSubjectsRegistered": "You haven't picked any subjects yet. Send /settings to choose your level and subjects first.",
     "askAnything": "Great! Ask me anything about {{subject}}. Type your question 👇",
-    "thinking": "Thinking... 🤔",
     "followUpPrompt": "What would you like to do next?",
     "askAnother": "Ask another",
     "askAnotherPrompt": "👇 Go ahead, type your next question.",

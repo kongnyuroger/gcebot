@@ -105,11 +105,12 @@ export class WhatsappSendService {
     this.logger.log(`Sent a list (${rowCount} row(s)) to ${to}`);
   }
 
-  async markAsRead(messageId: string): Promise<void> {
+  async markAsRead(messageId: string, showTypingIndicator = false): Promise<void> {
     await this.client.post('', {
       messaging_product: 'whatsapp',
       status: 'read',
       message_id: messageId,
+      ...(showTypingIndicator && { typing_indicator: { type: 'text' } }),
     });
   }
 

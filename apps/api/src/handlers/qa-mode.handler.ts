@@ -119,8 +119,7 @@ export class QaModeHandler {
 
     await this.recordActivity(phone);
 
-    await this.whatsappSendService.markAsRead(message.messageId);
-    await this.whatsappSendService.sendText(phone, this.i18n.t('qa.thinking', lang));
+    await this.whatsappSendService.markAsRead(message.messageId, true);
 
     const session = await this.sessionService.getSession(phone);
     await this.sessionService.updateSessionField(phone, 'currentQuestionText', questionText);
