@@ -224,4 +224,53 @@ describe('PastQuestionService', () => {
       expect(result?.markingSchemeChunkId).toBe('p1-marking-scheme');
     });
   });
+
+  describe('marking scheme answer-key table format', () => {
+    it('finds a question\'s answer inside a single-chunk compact answer-key table, not just the first entry', async () => {
+      // Reproduces a real uploaded marking scheme: a 50-question MCQ answer
+      // key that the chunker packs entirely into one chunk, which starts
+      // with the document's title rather than a question number.
+      const answerKeyTable =
+        'GCE A/L 0795 COMPUTER SCIENCE 2018 PAPER 1 ANSWER GUIDE ' +
+        '1. B 11. D 21. A 31. B 41. D 2. D 12. D 22. A 32. D 42. D ' +
+        '3. A 13. A 23. A 33. B 43. B 4. A 14. A 24. A 34. A 44. B ' +
+        '5. A 15. A 25. A 35. A 45. B 6. C 16. C 26. B 36. B 46. B ' +
+        '7. D 17. D 27. B 37. D 47. B 8. A 18. A 28. B 38. D 48. B ' +
+        '9. D 19. A 29. D 39. D 49. C 10. D 20. C 30. D 40. D 50. C';
+
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'q9-chunk',
+            content: '9. Decoded instruction is stored in:\nA. MDR\nB. IR\nC. PC\nD. MAR',
+            year: 2018,
+            topic: null,
+            paperNumber: 1,
+          },
+        ])
+        .mockResolvedValueOnce([{ id: 'answer-key-chunk', content: answerKeyTable }]);
+
+      const result = await service.getQuestion(baseFilter, []);
+
+      expect(result?.markingSchemeChunkId).toBe('answer-key-chunk');
+    });
+
+    it('does not match a 2-digit number that merely contains the target digit (19 vs 9)', async () => {
+      findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'q9-chunk',
+            content: '9. Some question.',
+            year: 2018,
+            topic: null,
+            paperNumber: 1,
+          },
+        ])
+        .mockResolvedValueOnce([{ id: 'no-nine-chunk', content: '19. A 29. B 39. C' }]);
+
+      const result = await service.getQuestion(baseFilter, []);
+
+      expect(result?.markingSchemeChunkId).toBeUndefined();
+    });
+  });
 });
