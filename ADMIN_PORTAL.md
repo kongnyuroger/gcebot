@@ -145,11 +145,24 @@ code generated from the URL if your terminal can't render one directly.
 ### Document upload — `/admin/documents`
 
 The priority feature. Dropzone (PDF-only, multi-file) → shared metadata form
-(level, subject, doc type, shared year) with **per-file year override** (so
-one batch can cover several years of the same subject/past-paper series) →
-upload with a real progress bar per file (`XMLHttpRequest.upload.onprogress`
-— `fetch()` has no upload-progress event, see `lib/upload-with-progress.ts`)
-→ ingestion queue table, polling for status.
+(level, subject, doc type, shared year, shared **paper number**) with
+**per-file year override** (so one batch can cover several years of the same
+subject/past-paper series) → upload with a real progress bar per file
+(`XMLHttpRequest.upload.onprogress` — `fetch()` has no upload-progress event,
+see `lib/upload-with-progress.ts`) → ingestion queue table, polling for
+status.
+
+The **Paper number** field only appears for doc type Past Paper / Marking
+Scheme (a syllabus/textbook has no paper concept) and, unlike year, has no
+per-file override — one batch is assumed to be one paper. It exists
+specifically so a Past Paper and its Marking Scheme can be matched to each
+other by paper, not just subject+year, when a subject has separate marking
+schemes for Paper 1/2/3 of the same year (see the root PROJECT.md's Practice
+mode section for the matching bug this fixes). Both the shared **Year** and
+**Paper number** fields reset after every batch upload completes — they used
+to persist across drops in the same page session, so a new batch dropped
+without re-checking the field could silently inherit a stale year/paper from
+the previous one.
 
 | Endpoint | Access | Notes |
 |---|---|---|

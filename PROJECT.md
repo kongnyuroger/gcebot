@@ -32,10 +32,11 @@ one webhook (`POST /webhook`), gets parsed and routed based on the student's
 current conversation state (held in Redis, not the database), and lands in
 one of two regimes: the original per-feature **button/state-machine handlers**
 (Q&A, practice questions, mock exams, progress — still fully intact and
-reachable via buttons/commands), or, for free text typed from the main menu,
-the **AI orchestrator** (OpenAI function-calling over the same underlying
-services — see [AI orchestrator](#ai-orchestrator)). A separate Next.js admin
-portal manages content and monitors usage — see [ADMIN_PORTAL.md](ADMIN_PORTAL.md).
+reachable via buttons/commands), or, for free text typed almost anywhere
+outside those flows' own answer-collection states, the **AI orchestrator**
+(OpenAI function-calling over the same underlying services — see
+[AI orchestrator](#ai-orchestrator)). A separate Next.js admin portal manages
+content and monitors usage — see [ADMIN_PORTAL.md](ADMIN_PORTAL.md).
 
 ```
 Student (WhatsApp) ──▶ POST /webhook ──▶ SignatureGuard (HMAC-SHA256)
@@ -51,19 +52,24 @@ Student (WhatsApp) ──▶ POST /webhook ──▶ SignatureGuard (HMAC-SHA256
         ▼          ▼             ▼           ▼           ▼          ▼
   Onboarding   QA Mode    Practice Mode  Mock Exam   Progress   Orchestrator
   Handler      Handler    Handler        Handler     Handler    Service
-  (buttons)    (buttons)  (buttons)      (buttons)   (buttons)  (free text
-        │          │             │           │           │      from MAIN_MENU)
+  (buttons)    (buttons)  (buttons)      (buttons)   (buttons)  (free text,
+        │          │             │           │           │      almost anywhere)
         └──────────┴──────┬──────┴───────────┴───────────┴──────────┘
                                        ▼
                          SessionService (Redis: session:{phone}, 2h TTL)
 ```
 
 The orchestrator is deliberately additive, not a replacement: every button,
-slash command, and their old sub-flows still work exactly as before. Only one
-path changed — typing free text while at the main menu, which used to fall
-through to a generic "I didn't understand" message, now reaches the
-orchestrator instead. See [AI orchestrator](#ai-orchestrator) for why, and
-exactly what is/isn't in scope.
+slash command, and their old sub-flows still work exactly as before. What
+changed is free-text routing: a bare answer to grade (`AWAITING_QUESTION`,
+`ANSWER_EVALUATION`) or a reply mid-timed-mock-exam (`MOCK_EXAM_ACTIVE`)
+still goes to its dedicated handler, since the *state* — not the text — is
+what says "this is an answer, not a request." Free text in every other
+state, including the main menu, a stale/expired session, or mid an old
+button flow the student never finished, now reaches the orchestrator instead
+of the old generic "I didn't understand" fallback. See
+[AI orchestrator](#ai-orchestrator) for why, and exactly what is/isn't in
+scope.
 
 ## Conversation state machine
 
@@ -159,12 +165,19 @@ webhook) or an unrecognized interactive subtype — returns `null` or
 5. `MENU_SELECTION` → a big switch on `session.state` dispatching to the
    state-appropriate handler (falls back to `MenuHandler` for unmapped
    states).
-6. `FREE_TEXT` → routed by state: `AWAITING_QUESTION` → `QaModeHandler`;
+6. `FREE_TEXT` → routed by state: `SUBJECT_SELECTION` →
+   `OnboardingHandler.handleSubjectTextReply` (conversational subject
+   parsing — see below); `AWAITING_QUESTION` → `QaModeHandler`;
    `ANSWER_EVALUATION` → `PracticeModeHandler`; `MOCK_EXAM_ACTIVE` →
-   `MockExamHandler`; **`MAIN_MENU` → `OrchestratorService`** (the one
-   deliberate behavior change of the AI-orchestrator rebuild — see
-   [AI orchestrator](#ai-orchestrator)); every other state → `FreeTextHandler`
-   (sends `errors.unknownCommand`).
+   `MockExamHandler` (these three keep their own handler because the
+   *state*, not the text, is what says "this is an answer to grade"); **every
+   other state → `OrchestratorService`** — this now includes `MAIN_MENU` (the
+   original, narrower scope of the AI-orchestrator rebuild), plus a
+   stale/expired session and any old-flow state the student was left
+   stranded in mid-flow, both of which used to dead-end at `FreeTextHandler`'s
+   generic "I didn't understand" message. `FreeTextHandler` is still
+   registered as a provider but is no longer reachable from the router at
+   all — see [AI orchestrator](#ai-orchestrator).
 
 **Handlers** (`apps/api/src/handlers/`, plus a few in `whatsapp/handlers/`):
 
@@ -201,12 +214,17 @@ share one grading implementation instead of two that could drift.
 
 **Outbound (`WhatsappSendService`)**: `sendText`, `sendButtons` (hard cap
 `MAX_BUTTONS = 3`, throws if exceeded), `sendList`, `markAsRead` — all POST to
-`https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages`. The 10-row list
-cap is enforced by *callers*, not the send service itself
-(`MAX_LIST_ROWS_PER_MESSAGE = 10` in `handlers/subjects.constants.ts`, used by
-`OnboardingHandler`/`PracticeModeHandler` to chunk longer option lists across
-multiple messages). Retries on `429`/`5xx` via an axios interceptor, up to 3
-attempts with exponential backoff (`2^attempt * 1000ms`).
+`https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages`. `markAsRead`
+takes an optional `showTypingIndicator` flag that adds WhatsApp Cloud API's
+native `typing_indicator` field (shown for up to 25s or until the real reply
+is sent) — used by both `QaModeHandler` and `OrchestratorService` in place of
+an earlier literal "Thinking... 🤔" text message (the `qa.thinking` i18n key
+that used to send has been removed). The 10-row list cap is enforced by
+*callers*, not the send service itself (`MAX_LIST_ROWS_PER_MESSAGE = 10` in
+`handlers/subjects.constants.ts`, used by `OnboardingHandler`/
+`PracticeModeHandler` to chunk longer option lists across multiple
+messages). Retries on `429`/`5xx` via an axios interceptor, up to 3 attempts
+with exponential backoff (`2^attempt * 1000ms`).
 
 ## AI orchestrator
 
@@ -218,21 +236,29 @@ orchestrator (`apps/api/src/orchestrator/`) is OpenAI function-calling over
 the exact same underlying services the button flows already use — not a
 parallel implementation of practice/mock-exam/progress logic.
 
-**Scope — deliberately narrow.** Only one router path changed: free text
-typed while `session.state === MAIN_MENU` now reaches `OrchestratorService`
-instead of `FreeTextHandler`. Every button tap, every slash command, and
-every other state's free-text handling (`AWAITING_QUESTION`,
-`ANSWER_EVALUATION`, `MOCK_EXAM_ACTIVE`, mid-onboarding, mid-practice-filter,
-mid-mock-exam-setup) is untouched and dispatches exactly as it did before.
-Onboarding's *level* selection (a 2-button tap) is also untouched — it was
-never the friction being addressed; only onboarding's *subject* step became
-conversational (see above).
+**Scope — widened once already, deliberately.** The rebuild originally routed
+only `MAIN_MENU` free text to the orchestrator; live WhatsApp testing showed
+the generic "I didn't understand" fallback was still reachable far more
+often than intended — a stale/expired session (2h Redis TTL expired, but the
+student is a real returning user, not new) or one parked mid an old flow
+(`QA_MODE` before picking a subject, `PRACTICE_FILTER`/`TOPIC`/`YEAR`/`TYPE`,
+`MOCK_EXAM_SETUP`, etc.) both dead-ended there regardless of what the
+student typed. Now every state routes free text to the orchestrator
+**except** `AWAITING_QUESTION`/`ANSWER_EVALUATION` (a bare "B" reply has no
+context of its own for an LLM to infer intent from — the *state* is what
+says "grade this") and `MOCK_EXAM_ACTIVE` (a timed exam's answers).
+`FreeTextHandler` is dead code as a result — still registered as a provider,
+never invoked by the router. Every button tap and slash command is untouched
+and dispatches exactly as before; onboarding's *level* selection (a 2-button
+tap) is also untouched — only onboarding's *subject* step is conversational
+(see above).
 
 **`OrchestratorService.handleMessage`** (`orchestrator.service.ts`) — the
 loop, run once per qualifying inbound message:
 
-1. Sends a WhatsApp "thinking" ack (`markAsRead` + `qa.thinking`) — a
-   tool-using turn can take a couple of real LLM round trips.
+1. Sends WhatsApp's native typing indicator (`markAsRead(messageId, true)`,
+   shown for up to 25s or until the real reply is sent) — a tool-using turn
+   can take a couple of real LLM round trips.
 2. `SystemPromptBuilderService.build(phone)` composes the system prompt fresh
    every turn (never cached — quota/streak/tier can all change between
    messages).
@@ -284,17 +310,33 @@ errors and returns a plain `{ error: string }` instead of throwing — a
 malformed tool call or a stale session must never surface a raw exception
 into the tool-calling loop.
 
+**Tool-confusion fix:** live testing showed the model sometimes called
+`answer_question` for phrasings like "do you have any csc questions
+available?" — relaying the raw retrieved chunk verbatim, which read as the
+bot dumping several questions at once instead of serving one to attempt.
+Both tools' descriptions and the system prompt's own routing guidance were
+strengthened to prefer `get_practice_question` for any indirect or
+loosely-worded "give me a question" phrasing, not just explicit "let me
+practice" requests.
+
 **Known rough edge, not yet resolved:** `start_mock_exam`'s success path
 hands the session over to the *existing* `MockExamHandler` (sets
 `session.state = MOCK_EXAM_SETUP` and populates `session.mockExam`, mirroring
 `MockExamHandler.assembleAndPromptReady` exactly) so the pre-existing
-timed-exam flow can take over. But `MockExamHandler.handleSetupSelection`
-only recognizes a WhatsApp button tap (`MOCK_START_EXAM`/`MOCK_CANCEL_EXAM`
-ids), not free text — if the orchestrator's own composed reply doesn't
-happen to result in the student tapping a real button, their first free-text
-"yes start it" hits the handler's "unrecognized" branch, which harmlessly
-re-sends the real Start/Cancel buttons. Not broken, just one avoidable extra
-round-trip; worth revisiting if it proves annoying in practice.
+timed-exam flow can take over. It writes `session.state` directly rather
+than through `StateTransitionService.transition()` — `VALID_TRANSITIONS`
+only has a `MAIN_MENU -> MOCK_EXAM_SETUP` edge, but the orchestrator (unlike
+the old button flow) can trigger this from any state now, the same
+deliberate escape-hatch pattern `/menu`/`/settings` already use. But
+`MockExamHandler.handleSetupSelection` only recognizes a WhatsApp button tap
+(`MOCK_START_EXAM`/`MOCK_CANCEL_EXAM` ids), and is itself only reachable via
+a button/list tap (`MessageRouterService.routeMenuSelection`) — free text
+typed in `MOCK_EXAM_SETUP` (e.g. "yes start it") isn't excluded from the
+orchestrator routing above, so it goes back to `OrchestratorService` instead
+of the setup handler, which has no tool/prompt guidance for "confirm the
+pending exam." Not broken, just unresolved — tapping the real Start/Cancel
+buttons the setup message sends is the reliable path today; worth revisiting
+if it proves annoying in practice.
 
 **`QaService.answerQuestion`'s `updateHistory` option**: `QaService` itself
 persists a `{question, answer}` pair into `session.conversationHistory` as a
@@ -391,24 +433,64 @@ Exceeding the FREE limit sends `qa.quotaExceeded` and returns before touching
 `PastQuestionService.getQuestion(filter, excludeIds)` queries `EmbeddingChunk`
 rows from `PAST_PAPER`-type documents matching subject/level/topic/year-range,
 excludes already-seen chunk ids, filters to chunks that look like an actual
-question (`QUESTION_START_PATTERN`), classifies MCQ vs. structured by option
-patterns (`MIN_MCQ_OPTIONS = 2` lettered options), and picks **uniformly at
-random** from the candidate pool — then looks up the matching
-`MARKING_SCHEME`-type chunk by subject/year/question-number.
+question (`QUESTION_START_PATTERN`, matched at the chunk's start), classifies
+MCQ vs. structured by option patterns (`MIN_MCQ_OPTIONS = 2` lettered
+options), and picks **uniformly at random** from the candidate pool.
+
+**Multi-question chunks**: real ingested past papers extract with no line
+breaks between questions at all, and short MCQs are dense enough that
+`ChunkingService`'s 500–800 token target routinely packs 2–3 of them into one
+chunk (confirmed live: a chunk containing "...D Last in last out approach.
+19. Which of the following..." was being served as a single practice
+question). `extractFirstQuestion` trims a selected chunk down to just its
+first question before it's ever shown, cutting at the next question-start
+boundary found anywhere in the flat text (`NEXT_QUESTION_PATTERN` — the
+number must be preceded by the prior question's terminal punctuation + a
+space, and followed by a space, since a bare digit can otherwise appear
+inside option text too).
+
+**Marking scheme lookup** (`findMarkingSchemeChunkId`): matches by subject +
+year + **`paperNumber`** (tagged at upload time on `Document`/`EmbeddingChunk`
+— see [Data model](#data-model); falls back to no paper filter for older,
+untagged content) + question number. Question-number matching itself tries
+two shapes, since real marking schemes come in both: a chunk that itself
+*starts with* the target question's number (the prose shape — "Question 9:
+award 1 mark for..."), or, failing that, `extractAnswerKeyLetter`
+(`mcq-grading.util.ts`) scanning the whole chunk for a `"N. <letter>"` entry
+— needed because MCQ marking schemes are commonly ingested as a single
+compact answer-key table for the whole paper ("1. B 11. D 21. A ... 50. C"),
+which the chunker packs into one chunk that starts with the document's
+title, not any question's number, so the prose-shaped match alone would
+never find *any* question in it.
 
 **Topic selection**: `TopicWeaknessService` aggregates graded `Interaction`
 rows by topic into an accuracy ranking; `pickWeightedRandomTopic` weights
 topics under 60% accuracy 3× more than others when picking "Surprise Me" —
 falls back to a plain random topic if the user has no history yet.
 
-**Grading**: MCQ answers are graded deterministically (letter match against
-the marking scheme, with fuzzy substring matching against option text too);
-wrong MCQ answers get a cheap `gpt-4o-mini` explanation. Structured/essay
-answers always get full LLM feedback (`gpt-4o`), formatted with ✅/⚠️/📊/💡
-sections, with a parsed "X out of Y" mark used to derive pass/fail at a 50%
-threshold. Every result updates both the durable `Interaction` log (used for
-weakness analysis) and a denormalized `User.topicScores` JSON counter (used
-for quick per-topic accuracy display).
+**Grading** (`mcq-grading.util.ts`, shared by `PracticeGradingService` and
+`MockGradingService`): MCQ answers are graded deterministically — a bare
+letter matches directly; full-text answers are matched via `parseOptions`
+against option text extracted from the flat, no-line-breaks question text
+(punctuation-boundary regexes, not newline-based, since real ingested
+content has neither). The correct letter itself comes from
+`extractCorrectAnswerLetter`, which tries the marking scheme's own prose
+phrasing first ("Correct answer: B") and falls back to
+`extractAnswerKeyLetter`'s answer-key-table scan for the same reason
+described above — `extractQuestionNumber` recovers the question's own number
+from its text for this fallback, since `PracticeGradingService`'s grading
+input only carries question text, not its number (`MockGradingService`
+already has `questionNumber` on hand). Wrong MCQ answers get a cheap
+`gpt-4o-mini` explanation, pulled via `extractSchemeExplanation` — which
+recognizes an answer-key-table-shaped chunk (5+ `"N. <letter>"` entries) and
+returns a generic "See the marking scheme for details" instead of dumping
+the entire raw table as the "explanation" (confirmed live: this was
+literally happening before the fix). Structured/essay answers always get
+full LLM feedback (`gpt-4o`), formatted with ✅/⚠️/📊/💡 sections, with a
+parsed "X out of Y" mark used to derive pass/fail at a 50% threshold. Every
+result updates both the durable `Interaction` log (used for weakness
+analysis) and a denormalized `User.topicScores` JSON counter (used for quick
+per-topic accuracy display).
 
 ## Mock exams
 
@@ -578,12 +660,19 @@ MARKING_SCHEME}`, `IngestionStatus {QUEUED, PROCESSING, COMPLETE, FAILED}`,
 |---|---|
 | `User` | `phone_number` (PK), `level`, `subjects: String[]`, `tier`, `language`, `streakDays`, `lastActiveDate`, `referralCode` (unique), `referredBy`, `topicScores: Json?` (denormalized `{subject: {topic: {correct, total}}}`) |
 | `Subscription` | `userId` (unique FK), `tier`, `startDate`, `endDate`, `paymentMethod`, `paymentReference` |
-| `Document` | `filename`, `subject`, `level`, `docType`, `year?`, `ingestionStatus`, `errorMessage?`, `chunkCount` |
-| `EmbeddingChunk` | `documentId` (FK, cascade delete), `content`, `embedding Unsupported("vector(1536)")`, `subject`, `level`, `topic?`, `year?`, `chunkIndex` |
+| `Document` | `filename`, `subject`, `level`, `docType`, `year?`, `paperNumber?`, `ingestionStatus`, `errorMessage?`, `chunkCount` |
+| `EmbeddingChunk` | `documentId` (FK, cascade delete), `content`, `embedding Unsupported("vector(1536)")`, `subject`, `level`, `topic?`, `year?`, `paperNumber?`, `chunkIndex` |
 | `Interaction` | `userId` (FK), `type`, `subject`, `topic`, `questionText`, `userAnswer`, `correct: Boolean?` |
 | `MockExam` | `userId` (FK), `subject`, `level`, `startedAt`, `submittedAt?`, `score?`, `maxScore?`, `topicBreakdown: Json?` |
 | `ReferralConversion` | `referrerId` (FK→User), `newUserId` (unique FK→User), `rewardGrantedAt?` |
 | `PendingPayment` | `userId` (FK), `tier`, `amount`, `currency` (default `"XAF"`), `provider`, `externalId` (unique), `status` |
+
+`Document`/`EmbeddingChunk.paperNumber` is tagged by admin staff at upload
+time (the admin portal's document form — see ADMIN_PORTAL.md) rather than
+inferred from PDF content, and exists specifically to disambiguate marking
+schemes across multiple papers of the same subject+year — see
+[Practice mode](#practice-mode)'s marking-scheme-lookup paragraph for why a
+content-based guess wasn't reliable enough on its own.
 
 Prisma client generates to `apps/api/generated/prisma` (imported as
 `'../../generated/prisma'` or similar relative paths throughout — this is
@@ -598,17 +687,25 @@ through its normal query API — this includes every insert into
 `add_embedding_chunks_ivfflat_index` → `add_user_topic_scores` (a JSON
 column, despite the name — not a separate table) →
 `restore_embedding_chunks_ivfflat_index` → `add_milestone_bonus_payment_method`
-→ `add_admin_users` → `add_broadcasts`.
+→ `add_admin_users` → `add_broadcasts` → `add_paper_number` (adds
+`Document.paperNumber`/`EmbeddingChunk.paperNumber`, both nullable) →
+`restore_ivfflat_index_after_paper_number` (same recurring issue below, hit
+again).
 
-> Every `prisma migrate dev --create-only` run against this schema generates
-> a spurious `DROP INDEX "embedding_chunks_embedding_idx"` line, because
-> Prisma can't see indexes on the `vector` column type. Always inspect
-> generated migration SQL and strip that line before applying — this is why
-> there's a `restore_embedding_chunks_ivfflat_index` migration in the history
-> at all (recovering from a Prisma-generated migration that hadn't yet had
-> this stripped). Also, `prisma migrate dev` (no `--create-only`) hangs
-> waiting on interactive stdin in sandboxed environments — use `prisma
-> migrate deploy` to apply a pre-generated, cleaned migration non-interactively.
+> Every `prisma migrate dev`/`migrate dev --create-only` run against this
+> schema generates a spurious `DROP INDEX "embedding_chunks_embedding_idx"`
+> line, because Prisma can't see indexes on the `vector` column type. This
+> has now recurred twice (`restore_embedding_chunks_ivfflat_index`, then
+> `restore_ivfflat_index_after_paper_number`) — always inspect generated
+> migration SQL for this line before applying. If a migration already
+> applied with the drop in it, don't hand-edit the applied file (checksum
+> mismatch); just add a same-pattern follow-up migration: `CREATE INDEX IF
+> NOT EXISTS embedding_chunks_embedding_idx ON embedding_chunks USING
+> ivfflat (embedding vector_cosine_ops) WITH (lists = 100)`. Also, `prisma
+> migrate dev` (no `--create-only`) hangs waiting on interactive stdin in
+> sandboxed environments — background/kill the hung process once the
+> migration file has been generated on disk, then apply it non-interactively
+> with `prisma migrate deploy`.
 
 ## Infrastructure & scripts
 
